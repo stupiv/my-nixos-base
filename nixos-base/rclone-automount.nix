@@ -45,7 +45,7 @@ in {
                 vfs-cache-mode = "full";
                 vfs-cache-max-age = "90d";
                 vfs-cache-min-free-space = "20G";
-                cache-dir = "${config.homeDirectory}/cache/rclone_${config.remoteName}";
+                cache-dir = "${config.homeDirectory}/.cache/rclone/myOpt.rclone.automount";
                 config = "${config.homeDirectory}/.config/rclone/rclone.conf";
                 uid = toString outerCfg.myOpt.admin.uid;
                 gid = toString outerCfg.myOpt.admin.gid;
