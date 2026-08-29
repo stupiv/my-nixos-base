@@ -25,8 +25,8 @@ with lib; {
         STOP_CHARGE_THRESH_BAT1 = 80;
         RESTORE_THRESHOLDS_ON_BAT = 1;
         #
-        TLP_DEFAULT_MODE = "BAT";
-        TLP_PERSISTENT_DEFAULT = 1;
+        TLP_AUTO_SWITCH = 0;
+        TLP_PROFILE_DEFAULT = "SAV";
         #
         USB_EXLUDE_PHONE = 1; # Charge smartphone
         WIFI_PWR_ON_BAT = "off"; # Power saving mode can cause an unstable Wi-Fi link.
