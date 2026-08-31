@@ -28,9 +28,11 @@ with lib; {
         TLP_AUTO_SWITCH = 0;
         TLP_PROFILE_DEFAULT = "SAV";
         #
-        USB_EXLUDE_PHONE = 1; # Charge smartphone
-        WIFI_PWR_ON_BAT = "off"; # Power saving mode can cause an unstable Wi-Fi link.
-        USB_EXCLUDE_BTUSB = 1; # solve stability issues with bluetooth connections
+        USB_EXLUDE_PHONE = 1; # See https://linrunner.de/tlp/faq/usb.html#smartphone-does-not-charge-when-connected
+        WIFI_PWR_ON_BAT = "off"; # See https://linrunner.de/tlp/faq/radio.html#slow-or-unstable-wi-fi-on-battery-power
+        USB_EXCLUDE_BTUSB = 1; # See https://linrunner.de/tlp/faq/radio.html#faq-bluetooth-unstable
+        # SOUND_POWER_SAVE_ON_AC = 0; # See https://linrunner.de/tlp/faq/audio.html
+        # SOUND_POWER_SAVE_ON_BAT = 0; # See https://linrunner.de/tlp/faq/audio.html
       };
     };
   };
