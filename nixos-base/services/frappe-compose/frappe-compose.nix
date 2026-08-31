@@ -42,6 +42,10 @@ with lib; let
     runtimeInputs = with pkgs; [podman nix coreutils gnugrep gnused];
     text = builtins.readFile ./frappe-bench-store.sh;
   });
+
+  # bench-init.sh runs inside the frappe/build container. Made a store path
+  # so frappe-bench-store.sh can mount and execute it (passed via argv).
+  bench-init-script = pkgs.writeScript "bench-init.sh" (builtins.readFile ./bench-init.sh);
 in {
   options.myOpt.frappe-compose = mkOption {
     default = {};
@@ -336,35 +340,23 @@ in {
           after = ["network-online.target"];
           requiredBy = [CONFIGURATOR];
           before = [CONFIGURATOR];
+          environment = {
+            GCROOT = cfg.frappe.benchDir;
+            APPS_JSON = toString (mkAppsJson name cfg);
+            FRAPPE_BRANCH = cfg.frappe.branch;
+            BUILD_IMAGE_TAG = cfg.frappe.build.tag;
+            BENCH_INIT_SCRIPT = toString bench-init-script;
+            BENCH_DIR = cfg.frappe.benchDir;
+          };
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
             ExecStart =
               if cfg.frappe.readOnlyMode
               then
-                (getExe (pkgs.writeShellScript "frappe-bench-store-readonly" ''
-                  if [ -e ${escapeShellArg cfg.frappe.benchDir} ]; then
-                    echo "WARNING: read-only mode; skipping frappe-bench rebuild." >&2
-                    echo "Changes to apps/branches will not take effect until read-only mode is disabled." >&2
-                    exit 0
-                  fi
-                  echo "ERROR: read-only mode is enabled but no frappe-bench exists at ${escapeShellArg cfg.frappe.benchDir}." >&2
-                  echo "A read-only deployment needs an existing bench; disable read-only mode" >&2
-                  echo "for the first deployment, then re-enable it." >&2
-                  exit 1
-                ''))
+                (getExe (pkgs.writeShellScript "frappe-bench-store-readonly" (builtins.readFile ./bench-readonly.sh)))
               else
-                utils.escapeSystemdExecArgs [
-                  frappe-bench-store
-                  "--gcroot"
-                  cfg.frappe.benchDir
-                  "--apps-json"
-                  (mkAppsJson name cfg)
-                  "--frappe-branch"
-                  cfg.frappe.branch
-                  "--build-image-tag"
-                  cfg.frappe.build.tag
-                ];
+                [ frappe-bench-store ];
           };
         };
       }))

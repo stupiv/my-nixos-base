@@ -1,7 +1,3 @@
 {
-  imports = [
-    # ./default.nix
-    # ./frappe-bench-store.sh
-    ./frappe-compose.nix
-  ];
+  imports = [./frappe-compose.nix];
 }

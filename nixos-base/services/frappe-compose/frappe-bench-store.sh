@@ -1,54 +1,38 @@
 #!/usr/bin/env bash
 # frappe-bench-store.sh — build a Frappe bench into the Nix store
 # The gcroot symlink is BOTH the GC protection AND the stable mount source.
+#
+# All configuration is read from the environment (set on the systemd unit by
+# the Nix module's `environment = { ... }`):
+#   GCROOT             gcroot symlink = stable mount source (required)
+#   APPS_JSON          apps.json listing apps to install       (required)
+#   FRAPPE_BRANCH      frappe branch, e.g. version-16          (required)
+#   BUILD_IMAGE_TAG    frappe/build image tag, e.g. v16.26.2   (required)
+#   BENCH_INIT_SCRIPT  bench-init.sh to run inside the container (required)
+#   HASH_FILE          file storing SPEC_HASH for skip-compare
+#                      (default: <GCROOT>-hash)
+#   FORCE              "1" to rebuild even if spec matches     (default: 0)
 set -euo pipefail
 
-usage() {
-  cat >&2 <<'EOF'
-Usage:
-  frappe-bench-store.sh \
-      --gcroot PATH            gcroot symlink = stable mount source
-                               (e.g. /var/lib/frappe/bench-current)
-      --apps-json PATH         apps.json listing apps to install
-      --frappe-branch BRANCH   frappe branch (e.g. version-16)
-      --build-image-tag TAG    frappe/build image tag (e.g. v16.26.2)
-      [--hash-file PATH]       file storing SPEC_HASH for skip-comparison
-                               (default: <gcroot>-hash)
-      [--force]                rebuild even if spec matches
-EOF
-  exit 1
-}
+: "${GCROOT:?GCROOT is required}"
+: "${APPS_JSON:?APPS_JSON is required}"
+: "${FRAPPE_BRANCH:?FRAPPE_BRANCH is required}"
+: "${BUILD_IMAGE_TAG:?BUILD_IMAGE_TAG is required}"
+: "${BENCH_INIT_SCRIPT:?BENCH_INIT_SCRIPT is required}"
+FORCE="${FORCE:-0}"
+HASH_FILE="${HASH_FILE:-${GCROOT}-hash}"
 
-# ── defaults ──────────────────────────────────────────────────
-GCROOT=""; APPS_JSON=""; FRAPPE_BRANCH=""
-TAG=""; HASH_FILE=""; FORCE=0
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --gcroot)          GCROOT="$2";        shift 2 ;;
-    --apps-json)       APPS_JSON="$2";     shift 2 ;;
-    --frappe-branch)   FRAPPE_BRANCH="$2"; shift 2 ;;
-    --build-image-tag) TAG="$2";           shift 2 ;;
-    --hash-file)       HASH_FILE="$2";     shift 2 ;;
-    --force)           FORCE=1;            shift   ;;
-    -h|--help)         usage ;;
-    *) echo "unknown flag: $1" >&2; usage ;;
-  esac
-done
-
-[[ -n "$GCROOT" && -n "$APPS_JSON" && -n "$FRAPPE_BRANCH" && -n "$TAG" ]] || usage
-[[ -n "$HASH_FILE" ]] || HASH_FILE="${GCROOT}-hash"
 mkdir -p "$(dirname "$GCROOT")" "$(dirname "$HASH_FILE")"
 
-IMAGE="docker.io/frappe/build:${TAG}"
+IMAGE="docker.io/frappe/build:${BUILD_IMAGE_TAG}"
 
 # ── spec fingerprint: apps.json + frappe branch + builder tag ─
-SPEC_HASH=$(cat "$APPS_JSON" <(echo "$FRAPPE_BRANCH") <(echo "$TAG") | sha256sum | cut -c1-12)
+SPEC_HASH=$(cat "$APPS_JSON" <(echo "$FRAPPE_BRANCH") <(echo "$BUILD_IMAGE_TAG") | sha256sum | cut -c1-12)
 
 # ── skip if hash matches AND the gcroot symlink is still valid ─
 if [[ $FORCE -eq 0 && -e "$HASH_FILE" && -e "$GCROOT" ]] \
    && [[ "$(cat "$HASH_FILE")" == "$SPEC_HASH" ]]; then
-  echo "==> spec ${SPEC_HASH} unchanged, skipping (use --force to rebuild)" >&2
+  echo "==> spec ${SPEC_HASH} unchanged, skipping (use FORCE=1 to rebuild)" >&2
   exit 0
 fi
 
@@ -67,18 +51,11 @@ podman run --rm \
   --name "frappe-bench-store-${SPEC_HASH}" \
   -v "$work":/home/frappe/frappe-bench \
   -v "$(realpath "$APPS_JSON")":/opt/frappe/apps.json:ro \
+  -v "$(realpath "$BENCH_INIT_SCRIPT")":/opt/bench-init.sh:ro \
+  -e "FRAPPE_BRANCH=${FRAPPE_BRANCH}" \
   "${USERNS_ARGS[@]}" \
   "$IMAGE" \
-  bash -c "
-    set -euo pipefail
-    bench init --ignore-exist --apps_path=/opt/frappe/apps.json \
-      --frappe-branch ${FRAPPE_BRANCH} --no-procfile --no-backups \
-      --skip-redis-config-generation --verbose /home/frappe/frappe-bench
-    cd /home/frappe/frappe-bench
-    echo '{}' > sites/common_site_config.json
-    find apps -mindepth 1 -path '*/.git' -prune -exec rm -rf {} +
-    rm -rf /home/frappe/frappe-bench/logs
-  "
+  bash /opt/bench-init.sh
 
 # Sanity check: bench init must actually have produced a bench.
 if [[ ! -d "$work/apps/frappe" ]]; then
