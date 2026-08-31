@@ -539,9 +539,8 @@ in {
                     done;
                     for app in $installed; do
                       if [ "$app" != "frappe" ] && ! grep -qx "$app" <<< ${escapeShellArg (concatStringsSep "\n" enabledApps)}; then
-                        echo "WARNING: app '$app' is installed on site ${site} but not enabled in configuration." >&2;
-                        echo "Uninstalling apps is destructive (drops their DocTypes and data), so it is left to you:" >&2;
-                        echo "  bench --site ${site} uninstall-app $app" >&2;
+                        echo "Uninstalling '$app';
+                        bench --site ${site} uninstall-app "$app";
                       fi
                     done;
                     echo "Running migrate for site ${site}";

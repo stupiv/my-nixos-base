@@ -88,7 +88,7 @@ in {
   };
 
   config = {
-    sops.secrets = mapAttrs' (tunnel_id: cfg: (nameValuePair cfg.n8n.envfile-key {})) (filterAttrs (_: cfg: (cfg.n8n.envfile-key != null)) enabled-n8n-compose);
+    sops.secrets = mapAttrs' (tunnel-id: cfg: (nameValuePair cfg.n8n.envfile-key {})) (filterAttrs (_: cfg: (cfg.n8n.envfile-key != null)) enabled-n8n-compose);
 
     myOpt.proxy-compose =
       mapAttrs' (name: cfg: (nameValuePair cfg.n8n.serviceName (mkMerge [

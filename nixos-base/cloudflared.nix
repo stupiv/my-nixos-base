@@ -20,20 +20,20 @@ with lib; {
   };
 
   config = {
-    sops.secrets = mapAttrs' (tunnel_id: cfg: (nameValuePair tunnel_id {})) config.myOpt.cloudflared;
+    sops.secrets = mapAttrs' (tunnel-id: cfg: (nameValuePair tunnel-id {})) config.myOpt.cloudflared;
 
     services.cloudflared.enable = mkIf (config.myOpt.cloudflared != {}) true;
     services.cloudflared.tunnels =
-      mapAttrs' (tunnel_id: cfg: (nameValuePair tunnel_id {
+      mapAttrs' (tunnel-id: cfg: (nameValuePair tunnel-id {
         inherit (cfg) ingress;
         edgeIPVersion = mkIf (config.services.dnscrypt-proxy.settings.ipv6_servers) (mkDefault "6");
-        credentialsFile = config.sops.secrets.${tunnel_id}.path;
+        credentialsFile = config.sops.secrets.${tunnel-id}.path;
         default = mkDefault "http_status:404";
       }))
       config.myOpt.cloudflared;
 
     systemd.services =
-      mapAttrs' (tunnel_id: cfg: (nameValuePair "cloudflared-tunnel-${tunnel_id}" {
+      mapAttrs' (tunnel-id: cfg: (nameValuePair "cloudflared-tunnel-${tunnel-id}" {
         requires = ["dnscrypt-proxy.service"];
         after = ["dnscrypt-proxy.service"];
         unitConfig = {
