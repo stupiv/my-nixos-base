@@ -8,5 +8,5 @@
   crm_v1 = "v1.82.0"; # https://github.com/frappe/crm
   insights_v3 = "v3.12.6"; # https://github.com/frappe/insights
   hrms_v16 = "v16.17.0"; # https://github.com/frappe/hrms
-  # wiki_v3 = "v3.0.0-beta.2"; # https://github.com/frappe/wiki
+  wiki_v3 = "v3.1.0"; # https://github.com/frappe/wiki
 }))
