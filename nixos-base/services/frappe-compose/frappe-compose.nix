@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  utils,
   ...
 }:
 with lib; let
@@ -44,8 +43,10 @@ with lib; let
   });
 
   # bench-init.sh runs inside the frappe/build container. Made a store path
-  # so frappe-bench-store.sh can mount and execute it (passed via argv).
   bench-init-script = pkgs.writeScript "bench-init.sh" (builtins.readFile ./bench-init.sh);
+  create-site-script = pkgs.writeScript "create-site.sh" (builtins.readFile ./create-site.sh);
+  migrate-script = pkgs.writeScript "migrate.sh" (builtins.readFile ./migrate.sh);
+  configurator-script = pkgs.writeScript "configurator.sh" (builtins.readFile ./configurator.sh);
 in {
   options.myOpt.frappe-compose = mkOption {
     default = {};
@@ -353,10 +354,8 @@ in {
             RemainAfterExit = true;
             ExecStart =
               if cfg.frappe.readOnlyMode
-              then
-                (getExe (pkgs.writeShellScript "frappe-bench-store-readonly" (builtins.readFile ./bench-readonly.sh)))
-              else
-                [ frappe-bench-store ];
+              then (getExe (pkgs.writeShellScript "frappe-bench-store-readonly" (builtins.readFile ./bench-readonly.sh)))
+              else [frappe-bench-store];
           };
         };
       }))
@@ -434,69 +433,28 @@ in {
             }
           ];
 
-          ${cfg.frappe.create-site.serviceName} = let
-            site = cfg.frappe.siteName;
-          in
-            mkMerge [
-              frappe_base
-              {
-                inherit (cfg.frappe.create-site) serviceName;
-                dependsOn = [cfg.frappe.configurator.serviceName];
-                entrypoint = "bash";
-                cmd = [
-                  "-c"
-                  ''
-                    set -e
-                    until [ -S "${mariadb-socket}" ] && \
-                          [ -S "${valkey-cache-socket}" ] && \
-                          [ -S "${valkey-queue-socket}" ]; do
-                      echo "Waiting for unix sockets..."
-                      sleep 5
-                    done
-                    export start=$(date +%s);
-                    until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_socket // empty"` ]] && \
-                      [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
-                      [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
-                    do
-                      echo "Waiting for sites/common_site_config.json to be created";
-                      sleep 5;
-                      if (( $(date +%s)-start > 120 )); then
-                        echo "could not find sites/common_site_config.json with required keys";
-                        exit 1
-                      fi
-                    done;
-                    echo "sites/common_site_config.json found";
-                    if [ -f "sites/${site}/.site-created" ]; then
-                      echo "Site ${site} already created; nothing to do";
-                    ${optionalString cfg.frappe.readOnlyMode ''
-                      elif true; then
-                        echo "ERROR: readOnlyMode is enabled but site ${site} does not exist yet." >&2;
-                        echo "Refusing to create a new site in read-only mode; disable readOnlyMode first." >&2;
-                        exit 1;
-                    ''}
-                    elif [ -d "sites/${site}" ]; then
-                      echo "ERROR: sites/${site} exists but has no .site-created marker." >&2;
-                      echo "A previous 'bench new-site' probably failed halfway, or the site" >&2;
-                      echo "predates the marker convention. Refusing to touch it." >&2;
-                      echo "" >&2;
-                      echo "Fix manually, then restart this service:" >&2;
-                      echo "  - if the site is healthy:  touch sites/${site}/.site-created" >&2;
-                      echo "  - if it is half-created:   bench drop-site ${site} --db-root-username=root --db-root-password=... --force --no-backup" >&2;
-                      exit 1;
-                    else
-                      bench new-site --mariadb-user-host-login-scope='%' --db-root-username=root \
-                      --admin-password="$INIT_ADMIN_PASSWORD" \
-                      --db-root-password="$DB_PASSWORD" \
-                      --set-default ${site};
-                      touch sites/${site}/.site-created;
-                    fi
-                  ''
-                ];
-              }
-            ];
+          ${cfg.frappe.create-site.serviceName} = mkMerge [
+            frappe_base
+            {
+              inherit (cfg.frappe.create-site) serviceName;
+              dependsOn = [cfg.frappe.configurator.serviceName];
+              entrypoint = "bash";
+              environment = {
+                SITE = cfg.frappe.siteName;
+                MARIADB_SOCKET = mariadb-socket;
+                VALKEY_CACHE_SOCKET = valkey-cache-socket;
+                VALKEY_QUEUE_SOCKET = valkey-queue-socket;
+                READONLY =
+                  if cfg.frappe.readOnlyMode
+                  then "1"
+                  else "0";
+              };
+              volumes = ["${toString create-site-script}:/opt/create-site.sh:ro"];
+              cmd = ["/opt/create-site.sh"];
+            }
+          ];
 
           ${cfg.frappe.migrate.serviceName} = let
-            site = cfg.frappe.siteName;
             enabledApps = attrNames (filterAttrs (_: appCfg: appCfg.enable) cfg.frappe.apps);
           in
             mkMerge [
@@ -505,40 +463,16 @@ in {
                 inherit (cfg.frappe.migrate) serviceName;
                 dependsOn = [cfg.frappe.create-site.serviceName];
                 entrypoint = "bash";
-                cmd = [
-                  "-c"
-                  ''
-                    set -e
-                    ${optionalString cfg.frappe.readOnlyMode ''
-                      echo "readOnlyMode is enabled; skipping app sync and migrate.";
-                      exit 0;
-                    ''}
-                    export start=$(date +%s);
-                    until [ -f "sites/${site}/.site-created" ]; do
-                      echo "Waiting for site ${site} to be created...";
-                      sleep 5;
-                      if (( $(date +%s)-start > 600 )); then
-                        echo "site ${site} was not created in time" >&2;
-                        exit 1;
-                      fi
-                    done;
-                    installed=$(bench --site ${site} list-apps -f json | jq -r '."${site}"[]');
-                    for app in ${escapeShellArgs enabledApps}; do
-                      if ! grep -qx "$app" <<< "$installed"; then
-                        echo "Installing new app: $app";
-                        bench --site ${site} install-app "$app";
-                      fi
-                    done;
-                    for app in $installed; do
-                      if [ "$app" != "frappe" ] && ! grep -qx "$app" <<< ${escapeShellArg (concatStringsSep "\n" enabledApps)}; then
-                        echo "Uninstalling '$app';
-                        bench --site ${site} uninstall-app "$app";
-                      fi
-                    done;
-                    echo "Running migrate for site ${site}";
-                    bench --site ${site} migrate;
-                  ''
-                ];
+                environment = {
+                  SITE = cfg.frappe.siteName;
+                  APPS = concatStringsSep " " enabledApps;
+                  READONLY =
+                    if cfg.frappe.readOnlyMode
+                    then "1"
+                    else "0";
+                };
+                volumes = ["${toString migrate-script}:/opt/migrate.sh:ro"];
+                cmd = ["/opt/migrate.sh"];
               }
             ];
 
@@ -552,32 +486,23 @@ in {
                 cfg.valkey.queue.serviceName
               ];
               entrypoint = "bash";
-              cmd = [
-                "-c"
-                ''
-                  if [ ! -f sites/common_site_config.json ]; then
-                    echo "{}" > sites/common_site_config.json;
-                  fi;
-                  ls -1 apps > sites/apps.txt;
-                  bench set-config -g db_type mariadb;
-                  bench set-config -g db_host ${escapeShellArg cfg.mariadb.serviceName};
-                  bench set-config -g db_socket "${mariadb-socket}";
-                  bench set-config -g redis_cache "unix://${valkey-cache-socket}";
-                  bench set-config -g redis_queue "unix://${valkey-queue-socket}";
-                  bench set-config -g redis_socketio "unix://${valkey-queue-socket}";
-                  bench set-config -gp socketio_port "${socketio_port}";
-                  bench set-config -gp maintenance_mode ${
-                    if cfg.frappe.readOnlyMode
-                    then "1"
-                    else "0"
-                  };
-                  bench set-config -gp allow_reads_during_maintenance ${
-                    if cfg.frappe.readOnlyMode
-                    then "1"
-                    else "0"
-                  };
-                ''
-              ];
+              environment = {
+                MARIADB_SERVICE = cfg.mariadb.serviceName;
+                MARIADB_SOCKET = mariadb-socket;
+                VALKEY_CACHE_SOCKET = valkey-cache-socket;
+                VALKEY_QUEUE_SOCKET = valkey-queue-socket;
+                SOCKETIO_PORT = socketio_port;
+                MAINTENANCE_MODE =
+                  if cfg.frappe.readOnlyMode
+                  then "1"
+                  else "0";
+                ALLOW_READS_DURING_MAINTENANCE =
+                  if cfg.frappe.readOnlyMode
+                  then "1"
+                  else "0";
+              };
+              volumes = ["${toString configurator-script}:/opt/configurator.sh:ro"];
+              cmd = ["/opt/configurator.sh"];
             }
           ];
 
