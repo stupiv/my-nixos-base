@@ -10,21 +10,15 @@ with lib; let
 in {
   services.syncthing.enable = true;
 
-  services.flatpak = {
-    enable = true;
-    packages = [
-      "app.zen_browser.zen"
-    ];
-  };
-  xdg.mimeApps = {
-    enable = true;
-    defaultApplicationPackages = with pkgs; [
-      onlyoffice-desktopeditors
-      qview
-      mpv
-      zed-editor
-    ];
-  };
+  services.flatpak.packages = [
+    # "app.zen_browser.zen"
+  ];
+  xdg.mimeApps.defaultApplicationPackages = with pkgs; [
+    onlyoffice-desktopeditors
+    qview
+    mpv
+    zed-editor
+  ];
   home.packages =
     config.xdg.mimeApps.defaultApplicationPackages
     ++ (with pkgs; [
@@ -33,10 +27,7 @@ in {
       resources
       obs-studio
     ]);
-  xdg.autostart = {
-    enable = true;
-    entries = [
-      (mkFlatpakPath "app.zen_browser.zen.desktop")
-    ];
-  };
+  xdg.autostart.entries = [
+    # (mkFlatpakPath "app.zen_browser.zen.desktop")
+  ];
 }
