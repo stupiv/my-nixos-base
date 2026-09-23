@@ -61,10 +61,10 @@ in {
         cloudflared = {
           enable = mkOption {
             type = types.bool;
-            default = cfg.cloudflared.tunnel_id != null;
+            default = cfg.cloudflared.tunnel-id != null;
             readOnly = true;
           };
-          tunnel_id = mkOption {
+          tunnel-id = mkOption {
             type = types.nullOr types.singleLineStr;
             default = null;
           };
@@ -131,7 +131,7 @@ in {
 
     myOpt.cloudflared = mkMerge (
       mapAttrsToList (name: cfg: {
-        ${cfg.cloudflared.tunnel_id} = {
+        ${cfg.cloudflared.tunnel-id} = {
           ingress.${cfg.hostName} = "unix:${cfg.cloudflared.unix-socket}";
         };
       })
