@@ -9,7 +9,6 @@
     ./firewall.nix
     ./flatpak.nix
     ./home-manager.nix
-    ./mesa-opencl.nix
     ./naturalScrolling.nix
     ./nixos_ozone_wl.nix
     ./sound.nix
