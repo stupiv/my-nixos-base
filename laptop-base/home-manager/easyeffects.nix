@@ -1,8 +1,9 @@
-let
-  preset_name = "default";
+{lib, ...}:
+with lib; let
+  preset_name = "my-default";
 in {
   services.easyeffects = {
-    enable = true;
+    enable = mkDefault true;
     preset = preset_name;
     extraPresets = {
       ${preset_name} = {
