@@ -54,9 +54,6 @@ in {
             type = types.singleLineStr;
             example = "/var/lib/<name>/postgresql_v18";
           };
-          # port = mkOption {
-          #   type = types.port;
-          # };
         };
         clickhouse = {
           package = mkOption {
@@ -67,9 +64,6 @@ in {
             type = types.singleLineStr;
             example = "/var/lib/<name>/clickhouse_v____";
           };
-          # port = mkOption {
-          #   type = types.port;
-          # };
         };
       };
     }));
@@ -147,9 +141,6 @@ in {
                 };
                 services.postgresql = {
                   inherit (cfg.postgresql) package;
-                  settings = {
-                    # inherit (cfg.postgresql) port;
-                  };
                 };
                 services.clickhouse = {
                   inherit (cfg.clickhouse) package;
