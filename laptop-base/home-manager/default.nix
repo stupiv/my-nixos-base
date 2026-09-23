@@ -1,10 +1,10 @@
 {
   imports = [
+    ../common
     ./clipboard.nix
     # ./default.nix
-    ./easyeffects.nix
+    ./flatpak.nix
     ./packages.nix
     ./xdg.nix
-    ./xdg_autostart.nix
   ];
 }

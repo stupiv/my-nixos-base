@@ -7,6 +7,7 @@
     ./de.nix
     # ./default.nix
     ./firewall.nix
+    ./flatpak.nix
     ./home-manager.nix
     ./mesa-opencl.nix
     ./naturalScrolling.nix
