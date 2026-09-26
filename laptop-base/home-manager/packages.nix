@@ -25,7 +25,7 @@ in {
       pinta
       flameshot
       resources
-      obs-studio
+      kdePackages.krecorder
     ]);
   xdg.autostart.entries = [
     # (mkFlatpakPath "app.zen_browser.zen.desktop")
