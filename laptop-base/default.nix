@@ -12,7 +12,6 @@
     ./naturalScrolling.nix
     ./nixos_ozone_wl.nix
     ./sound.nix
-    ./steam.nix
     ./tlp.nix
     ./tmpfs.nix
     ./vi-ime.nix
