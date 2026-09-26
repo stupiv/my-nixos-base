@@ -9,7 +9,7 @@ with lib; let
 in {
   options.myOpt.easyeffects.enable = mkOption {
     type = types.bool;
-    default = false;
+    default = true;
   };
   config = mkIf cfg.enable {
     services.easyeffects = {
