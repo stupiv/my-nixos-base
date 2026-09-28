@@ -1,0 +1,34 @@
+{
+  imports = [
+    ./2511
+    ./dnscrypt
+    ./services
+    ./sleep-on-idle
+    ./terminal
+    ./admin.nix
+    ./bootloader.nix
+    ./caddy.nix
+    ./cloudflared.nix
+    ./cosmic.nix
+    # ./default.nix
+    ./dirs.nix
+    ./firmware.nix
+    ./ipv6.nix
+    ./mesa-opencl.nix
+    ./networkmanager.nix
+    ./nix.nix
+    ./nix-ld.nix
+    ./no-coredump.nix
+    ./openssh.nix
+    ./plasma6.nix
+    ./podman.nix
+    ./proxy-compose.nix
+    ./rclone-automount.nix
+    ./shellcheck.nix
+    ./sops.nix
+    ./time.nix
+    ./tlp.nix
+    ./vmVariant.nix
+    ./zramSwap.nix
+  ];
+}
