@@ -10,5 +10,6 @@
     ./micro.nix
     ./misc.nix
     ./trash.nix
+    ./yazi.nix
   ];
 }
