@@ -73,18 +73,6 @@
         "type": "github"
       }
     },
-    "my-nixos-base": {
-      "flake": false,
-      "locked": {
-        "path": "../my-nixos-base",
-        "type": "path"
-      },
-      "original": {
-        "path": "../my-nixos-base",
-        "type": "path"
-      },
-      "parent": []
-    },
     "nix-flatpak": {
       "locked": {
         "lastModified": 1767983141,
@@ -173,13 +161,28 @@
         "type": "github"
       }
     },
+    "nixpkgs-2611": {
+      "locked": {
+        "lastModified": 1790570722,
+        "narHash": "sha256-Avcz96Q+8OkfUIUXipBBVsQn19L622BtKP7mk6M+uls=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "419fe0f449b3fbe3bdd53d9840288db4509ec32e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "419fe0f449b3fbe3bdd53d9840288db4509ec32e",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "disko": "disko",
         "flake-parts": "flake-parts",
         "functional_blocklist": "functional_blocklist",
         "home-manager": "home-manager",
-        "my-nixos-base": "my-nixos-base",
         "nix-flatpak": "nix-flatpak",
         "nix-index-database": "nix-index-database",
         "nixos-hardware": "nixos-hardware",
@@ -188,6 +191,7 @@
         ],
         "nixpkgs-2511": "nixpkgs-2511",
         "nixpkgs-2605": "nixpkgs-2605",
+        "nixpkgs-2611": "nixpkgs-2611",
         "sops-nix": "sops-nix",
         "zen-browser-flake": "zen-browser-flake"
       }
