@@ -26,6 +26,7 @@
     ./rclone-automount.nix
     ./shellcheck.nix
     ./sops.nix
+    ./specialisation.nix
     ./time.nix
     ./tlp.nix
     ./vmVariant.nix
