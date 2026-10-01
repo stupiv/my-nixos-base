@@ -1,7 +1,15 @@
 {
+  config,
+  lib,
+  pkgs,
+  inputs,
+  ...
+}:
+with lib; let
+in {
   services.pipewire = {
-    enable = true;
-    pulse.enable = true;
+    enable = mkDefault true;
+    pulse.enable = mkDefault true;
   };
-  programs.dconf.enable = true; # for home-manager services.easyeffects.enable
+  programs.dconf.enable = mkDefault true; # for home-manager services.easyeffects.enable
 }
