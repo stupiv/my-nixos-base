@@ -5,7 +5,7 @@
   inputs,
   ...
 }:
-with lib; {
+with lib; let
+in {
   myOpt.cosmic.enable = true;
-  programs.kclock.enable = true;
 }
