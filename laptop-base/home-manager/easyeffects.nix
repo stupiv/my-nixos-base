@@ -1,9 +1,12 @@
 {
   config,
   lib,
+  pkgs,
+  inputs,
   ...
 }:
 with lib; let
+  inherit (pkgs) pkgs-2605;
   cfg = config.myOpt.easyeffects;
   preset_name = "my-default-preset";
 in {
@@ -14,6 +17,7 @@ in {
   config = mkIf cfg.enable {
     services.easyeffects = {
       enable = mkDefault true;
+      package = mkDefault pkgs-2605.easyeffects;
       preset = mkDefault preset_name;
       extraPresets = {
         ${preset_name} = {
