@@ -2,7 +2,7 @@
   imports = [
     ../nixos-base
     # ./home-manager
-    # ./WIP
+    ./appimage.nix
     ./bluetooth.nix
     ./de.nix
     # ./default.nix
