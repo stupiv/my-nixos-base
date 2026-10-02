@@ -8,10 +8,9 @@
 with lib; let
   mkFlatpakPath = desktop: "${config.xdg.dataHome}/flatpak/exports/share/applications/${desktop}";
 in {
-  services.syncthing.enable = true;
+  services.syncthing.enable = mkDefault true;
 
   services.flatpak.packages = [
-    # "app.zen_browser.zen"
   ];
   xdg.mimeApps.defaultApplicationPackages = with pkgs; [
     onlyoffice-desktopeditors
@@ -26,8 +25,8 @@ in {
       flameshot
       resources
       kdePackages.krecorder
+      cosmic-store
     ]);
   xdg.autostart.entries = [
-    # (mkFlatpakPath "app.zen_browser.zen.desktop")
   ];
 }
