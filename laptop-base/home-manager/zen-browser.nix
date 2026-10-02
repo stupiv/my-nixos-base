@@ -11,6 +11,7 @@ with lib; let
 in {
   imports = [inputs.zen-browser-flake.homeModules.default];
   programs.zen-browser = {
+    enable = mkDefault true;
     nixGL.enable = mkDefault true;
     setAsDefaultBrowser = mkDefault true;
   };
