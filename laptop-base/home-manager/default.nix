@@ -1,7 +1,7 @@
 {
   imports = [
-    ../common
     ./activitywatch.nix
+    ./alacritty.nix
     ./clipboard.nix
     # ./default.nix
     ./easyeffects.nix
