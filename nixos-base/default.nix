@@ -14,7 +14,6 @@
     ./dirs.nix
     ./firmware.nix
     ./ipv6.nix
-    ./mesa-opencl.nix
     ./networkmanager.nix
     ./nix.nix
     ./nix-ld.nix
