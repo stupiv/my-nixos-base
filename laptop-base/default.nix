@@ -8,7 +8,6 @@
     ./de.nix
     # ./default.nix
     ./firewall.nix
-    ./flatpak.nix
     ./home-manager.nix
     ./naturalScrolling.nix
     ./nixos_ozone_wl.nix
