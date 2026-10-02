@@ -18,7 +18,6 @@
     ./nix-ld.nix
     ./no-coredump.nix
     ./openssh.nix
-    ./plasma6.nix
     ./podman.nix
     ./proxy-compose.nix
     ./rclone-automount.nix

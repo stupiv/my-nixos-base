@@ -12,6 +12,7 @@
     ./home-manager.nix
     ./naturalScrolling.nix
     ./nixos_ozone_wl.nix
+    ./plasma6.nix
     ./sound.nix
     ./tlp.nix
     ./tmpfs.nix
