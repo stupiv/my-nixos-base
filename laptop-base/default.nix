@@ -4,6 +4,7 @@
     # ./home-manager
     ./appimage.nix
     ./bluetooth.nix
+    ./cosmic.nix
     ./de.nix
     # ./default.nix
     ./firewall.nix

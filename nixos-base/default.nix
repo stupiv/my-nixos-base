@@ -9,7 +9,6 @@
     ./bootloader.nix
     ./caddy.nix
     ./cloudflared.nix
-    ./cosmic.nix
     # ./default.nix
     ./dirs.nix
     ./firmware.nix
