@@ -42,6 +42,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hermes-agent.url = "github:NousResearch/hermes-agent/v0.21.7"; # No inputs follows for cache to work
+    vpn-confinement.url = "github:Maroka-chan/VPN-Confinement";
   };
   outputs = inputs: (inputs.flake-parts.lib.mkFlake {inherit inputs;} {
     systems = ["x86_64-linux" "aarch64-linux"];
