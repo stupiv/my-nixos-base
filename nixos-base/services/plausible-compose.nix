@@ -116,7 +116,7 @@ in {
               };
               ${cfg.shared-run-secrets} = {
                 hostPath = cfg.shared-run-secrets;
-                isReadOnly = false;
+                isReadOnly = true;
               };
             };
             config.imports = [
