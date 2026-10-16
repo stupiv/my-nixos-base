@@ -192,40 +192,9 @@ in {
 
     containers =
       mapAttrs' (_: cfg: (nameValuePair cfg.containerName {
-        ephemeral = true;
-        autoStart = false;
+        ephemeral = mkDefault true;
         config.nixpkgs.pkgs = pkgs;
       }))
       (filterAttrs (_: cfg: cfg.containerName != null) config.myOpt.proxy-compose);
-
-    # virtualisation.oci-containers.containers = concatMapAttrs (name1: cfg1:
-    #   (mapAttrs' (name2: cfg2: (nameValuePair name2 (mkMerge [
-    #       cfg2
-    #       {
-    #         autoStart = false;
-    #         serviceName = name2;
-    #       }
-    #     ])))
-    #     cfg1.oci-containers)
-    #   config.myOpt.proxy-compose);
-
-    # systemd.services = concatMapAttrs (name1: cfg1:
-    #   (mapAttrs' (name2: cfg2: (
-    #       nameValuePair name2 {
-    #         unitConfig = {
-    #           StartLimitIntervalSec = mkDefault "10";
-    #           StartLimitBurst = mkDefault "5";
-    #         };
-    #         serviceConfig = {
-    #           RemainAfterExit = mkDefault true;
-    #           Restart = mkDefault "on-failure";
-    #           RestartMaxDelaySec = mkDefault "5min";
-    #           RestartSteps = mkDefault "10";
-    #           RestartSec = mkDefault "1";
-    #         };
-    #       }
-    #     ))
-    #     cfg1.oci-containers)
-    #   config.myOpt.proxy-compose);
   };
 }
