@@ -24,6 +24,7 @@
     ./shellcheck.nix
     ./sops.nix
     ./specialisation.nix
+    ./systemd-socket-proxyd.nix
     ./time.nix
     ./tlp.nix
     ./vmVariant.nix

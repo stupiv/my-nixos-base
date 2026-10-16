@@ -7,7 +7,7 @@
 }:
 with lib; let
   outerCfg = config;
-  enabled-hermes-agent-compose = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.hermes-agent-compose;
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.hermes-agent-compose;
 in {
   options.myOpt.hermes-agent-compose = mkOption {
     default = {};
@@ -43,6 +43,11 @@ in {
           default = name;
           readOnly = true;
         };
+        socketDir = mkOption {
+          type = types.singleLineStr;
+          default = "/run/sockets/${name}";
+          readOnly = true;
+        };
         secretsDir = mkOption {
           type = types.singleLineStr;
           default = builtins.dirOf outerCfg.sops.secrets.${cfg.wireguardConfigFile-key}.path;
@@ -68,6 +73,11 @@ in {
             default = "${cfg.secretsDirName}/hermes-agent-envFile";
             readOnly = true;
           };
+          ip-socket = mkOption {
+            type = types.singleLineStr;
+            default = "${cfg.socketDir}/hermes-agent.sock";
+            readOnly = true;
+          };
         };
         litellm = {
           stateDir = mkOption {
@@ -81,6 +91,11 @@ in {
             default = "${cfg.secretsDirName}/litellm-envFile";
             readOnly = true;
           };
+          ip-socket = mkOption {
+            type = types.singleLineStr;
+            default = "${cfg.socketDir}/litellm.sock";
+            readOnly = true;
+          };
         };
       };
     }));
@@ -90,13 +105,13 @@ in {
     inputs.vpn-confinement.nixosModules.default
   ];
 
-  config = {
+  config = mkIf (enabled != {}) {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
         ${cfg.wireguardConfigFile-key} = mkForce {};
         ${cfg.litellm.envFile-key} = mkForce {};
         ${cfg.hermes-agent.envFile-key} = mkForce {};
       })
-      enabled-hermes-agent-compose);
+      enabled);
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (
         _: cfg: {
@@ -105,12 +120,13 @@ in {
             {
               health-check.path = "/";
               endpoints = {
-                hermes-agent = {
-                  # origin.socket-address = ?;
+                default = {
+                  # hermes-agent = {
+                  origin.socket-address = cfg.hermes-agent.ip-socket;
                   proxy.port = cfg.hermes-agent.port;
                 };
                 litellm = {
-                  # origin.socket-address = ?;
+                  origin.socket-address = cfg.litellm.ip-socket;
                   proxy.port = cfg.litellm.port;
                 };
               };
@@ -118,7 +134,7 @@ in {
           ];
         }
       )
-      enabled-hermes-agent-compose);
+      enabled);
 
     containers = mkMerge (mapAttrsToList (
         _: cfg: (let
@@ -141,9 +157,25 @@ in {
                 hostPath = cfg.secretsDir;
                 isReadOnly = true;
               };
+              ${cfg.socketDir} = {
+                hostPath = cfg.socketDir;
+                isReadOnly = false;
+              };
             };
             config = {
               imports = [inputs.hermes-agent.nixosModules.default];
+
+              myOpt.systemd-socket-proxyd = {
+                hermes-agent = {
+                  origin.tcp-port = containerCfg.services.hermes-agent.backend.port;
+                  proxy.ip-socket = cfg.hermes-agent.ip-socket;
+                };
+                litellm = {
+                  origin.tcp-port = containerCfg.services.litellm.port;
+                  proxy.ip-socket = cfg.litellm.ip-socket;
+                };
+              };
+
               services.litellm = {
                 enable = true;
                 stateDir = cfg.litellm.stateDir;
@@ -174,7 +206,7 @@ in {
           };
         })
       )
-      enabled-hermes-agent-compose);
+      enabled);
 
     vpnNamespaces = mkMerge (mapAttrsToList (
         _: cfg: {
@@ -184,7 +216,7 @@ in {
           };
         }
       )
-      enabled-hermes-agent-compose);
+      enabled);
 
     systemd.services =
       mapAttrs' (_: cfg: (nameValuePair cfg.serviceName {
@@ -193,14 +225,15 @@ in {
           inherit (cfg) vpnNamespace;
         };
       }))
-      enabled-hermes-agent-compose;
+      enabled;
 
     systemd.tmpfiles.rules = flatten (
       mapAttrsToList (_: cfg: [
         "d '${cfg.hermes-agent.stateDir}' - - - - -"
         "d '${cfg.litellm.stateDir}' - - - - -"
+        "d '${cfg.socketDir}' - - - - -"
       ])
-      enabled-hermes-agent-compose
+      enabled
     );
   };
 }
