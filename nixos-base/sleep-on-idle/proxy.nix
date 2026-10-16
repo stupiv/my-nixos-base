@@ -6,7 +6,7 @@
 }:
 with lib; let
   inherit (pkgs) writeShellScriptBin;
-  systemd-socket-proxyd = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd";
+  systemd-socket-proxyd = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd";
   sleep = "${pkgs.coreutils}/bin/sleep";
   curl = getExe pkgs.curl;
   cgi-fcgi = getExe pkgs.fcgi;

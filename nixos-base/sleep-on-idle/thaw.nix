@@ -6,7 +6,7 @@
 }:
 with lib; let
   inherit (pkgs) writeShellScriptBin;
-  systemctl = "${pkgs.systemd}/bin/systemctl";
+  systemctl = "${config.systemd.package}/bin/systemctl";
 in {
   systemd.services =
     mapAttrs' (_: cfg: let
