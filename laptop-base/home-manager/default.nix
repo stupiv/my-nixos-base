@@ -1,5 +1,6 @@
 {
   imports = [
+    ../common
     ./activitywatch.nix
     ./alacritty.nix
     ./clipboard.nix

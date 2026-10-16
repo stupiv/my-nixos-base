@@ -1,6 +1,7 @@
 {
   imports = [
     ../nixos-base
+    ./common
     # ./home-manager
     ./appimage.nix
     ./bluetooth.nix

@@ -20,10 +20,8 @@ in {
       cosmic-screenshot
       cosmic-term
     ];
-    services.desktopManager = {
-      cosmic.enable = mkDefault true;
-      cosmic-greeter.enable = mkDefault true;
-    };
+    services.desktopManager.cosmic.enable = mkDefault true;
+    services.displayManager.cosmic-greeter.enable = mkDefault true;
     environment.sessionVariables.COSMIC_DATA_CONTROL_ENABLED = mkDefault 1;
   };
 }

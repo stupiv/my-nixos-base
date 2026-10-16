@@ -1,5 +1,3 @@
-# TODO: assert build.tag == erpnext.tag
-# TODO: assert if frappe.tag exists frappe.tag == base.tag
 {
   config,
   lib,
