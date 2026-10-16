@@ -1,6 +1,8 @@
 {
   config,
   lib,
+  pkgs,
+  inputs,
   ...
 }:
 with lib; let
@@ -15,8 +17,8 @@ in {
     }: {
       options = {
         enable = mkOption {
-          default = true;
           type = types.bool;
+          default = true;
         };
         proxy-compose = mkOption {
           type = types.anything;
@@ -30,10 +32,12 @@ in {
     }));
   };
 
-  config.myOpt.proxy-compose =
-    mapAttrs' (_: cfg: (
-      nameValuePair cfg.serviceName
-      cfg.proxy-compose
-    ))
-    enabled-compose-template;
+  config = {
+    myOpt.proxy-compose =
+      mapAttrs' (_: cfg: (
+        nameValuePair cfg.serviceName
+        cfg.proxy-compose
+      ))
+      enabled-compose-template;
+  };
 }
