@@ -13,7 +13,6 @@ with lib; let
     serviceName = mkOption {
       type = types.nullOr types.singleLineStr;
       default = serviceName;
-      readOnly = true;
     };
     tcp-host = mkOption {
       type = types.nullOr types.singleLineStr;
@@ -26,7 +25,7 @@ with lib; let
     ip-socket = mkOption {
       type = types.singleLineStr;
       default =
-        if self.port != null
+        if self.tcp-port != null
         then "${self.tcp-host}:${toString self.tcp-port}"
         else null;
     };
@@ -34,8 +33,12 @@ with lib; let
 in {
   options.myOpt.systemd-socket-proxyd = mkOption {
     default = {};
-    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
-      cfg = innerArgs;
+    type = types.attrsOf (types.submodule ({
+      name,
+      config,
+      ...
+    }: let
+      cfg = config;
     in {
       options = {
         enable = mkOption {
@@ -73,7 +76,7 @@ in {
           serviceConfig = {
             ExecStart = utils.escapeSystemdExecArgs [
               systemd-socket-proxyd
-              cfg.origin.ip-address
+              cfg.origin.ip-socket
             ];
           };
         }
