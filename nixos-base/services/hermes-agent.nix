@@ -28,9 +28,15 @@ in {
           default = "container@${name}";
           readOnly = true;
         };
+        sopsFile = mkOption {
+          type = types.anything;
+        };
         vpnNamespace = mkOption {
-          type = types.singleLineStr;
-          default = name;
+          type = types.anything;
+          default =
+            if builtins.stringLength name < 8
+            then name
+            else "v${builtins.substring 0 6 (builtins.hashString "sha256" name)}";
           readOnly = true;
         };
         secretsDirName = mkOption {
@@ -107,9 +113,9 @@ in {
 
   config = mkIf (enabled != {}) {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.wireguardConfigFile-key} = mkForce {};
-        ${cfg.litellm.envFile-key} = mkForce {};
-        ${cfg.hermes-agent.envFile-key} = mkForce {};
+        ${cfg.wireguardConfigFile-key} = mkForce {inherit (cfg) sopsFile;};
+        ${cfg.litellm.envFile-key} = mkForce {inherit (cfg) sopsFile;};
+        ${cfg.hermes-agent.envFile-key} = mkForce {inherit (cfg) sopsFile;};
       })
       enabled);
 
@@ -121,7 +127,6 @@ in {
               health-check.path = "/";
               endpoints = {
                 default = {
-                  # hermes-agent = {
                   origin.socket-address = cfg.hermes-agent.ip-socket;
                   proxy.port = cfg.hermes-agent.port;
                 };
@@ -137,19 +142,18 @@ in {
       enabled);
 
     containers = mkMerge (mapAttrsToList (
-        _: cfg: (let
-          containerCfg = outerCfg.containers.${cfg.containerName}.config;
-        in {
+        _: cfg: {
           ${cfg.containerName} = {
             ephemeral = true;
-            privateNetwork = ! outerCfg.vpnNamespaces.${cfg.vpnNamespace}.enable;
+            privateNetwork = false;
+            networkNamespace = "/run/netns/${cfg.vpnNamespace}";
             autoStart = false;
             bindMounts = {
-              ${containerCfg.services.hermes-agent.stateDir} = {
+              ${cfg.hermes-agent.stateDir} = {
                 hostPath = cfg.hermes-agent.stateDir;
                 isReadOnly = false;
               };
-              ${containerCfg.services.litellm.stateDir} = {
+              ${cfg.litellm.stateDir} = {
                 hostPath = cfg.litellm.stateDir;
                 isReadOnly = false;
               };
@@ -161,9 +165,19 @@ in {
                 hostPath = cfg.socketDir;
                 isReadOnly = false;
               };
+              "/etc/resolv.conf" = {
+                hostPath = "/etc/netns/${cfg.vpnNamespace}/resolv.conf";
+                isReadOnly = true;
+              };
             };
-            config = {
-              imports = [inputs.hermes-agent.nixosModules.default];
+            # specialArgs = {inherit inputs;};
+            config = {config, ...}: let
+              containerCfg = config;
+            in {
+              imports = [
+                inputs.hermes-agent.nixosModules.default
+                ../systemd-socket-proxyd.nix
+              ];
 
               myOpt.systemd-socket-proxyd = {
                 hermes-agent = {
@@ -177,7 +191,7 @@ in {
               };
 
               services.litellm = {
-                enable = true;
+                # enable = true;
                 stateDir = cfg.litellm.stateDir;
                 port = cfg.litellm.port;
                 environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
@@ -185,10 +199,22 @@ in {
               services.hermes-agent = {
                 enable = true;
                 stateDir = cfg.hermes-agent.stateDir;
-                backend.mode = "dashboard";
+                backend.mode = "serve";
                 backend.port = cfg.hermes-agent.port;
                 environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
                 settings = {
+                  browser = {
+                    backend = "off";
+                    cloud_provider = "camofox";
+                    cdp_url = "";
+                    extension_control.enabled = false;
+                  }; # Force (self-hosted) Camofox
+                  security.allow_lazy_installs = false; # Force Camofox
+                  web = {
+                    backend = "firecrawl";
+                    search_backend = "firecrawl";
+                    extract_backend = "firecrawl";
+                  }; # Force (self-hosted) Firecrawl
                   display.busy_input_mode = "steer";
                   model = {
                     default = "";
@@ -197,14 +223,19 @@ in {
                     api_mode = "";
                   };
                   agent = {
-                    reasoning_effort = "";
+                    reasoning_effort = "none"; # More secure (AI safety), efficient and fast
                     service_tier = "";
                   };
+                  telemetry.shared_metrics = {
+                    enabled = true;
+                    send = true;
+                  };
+                  moa.presets.default.enabled = false;
                 };
               };
             };
           };
-        })
+        }
       )
       enabled);
 
@@ -218,14 +249,37 @@ in {
       )
       enabled);
 
-    systemd.services =
-      mapAttrs' (_: cfg: (nameValuePair cfg.serviceName {
-        vpnConfinement = {
-          enable = true;
-          inherit (cfg) vpnNamespace;
+    networking.enableIPv6 = true;
+    systemd.services = mkMerge (mapAttrsToList
+      (_: cfg: {
+        ${cfg.serviceName} = {
+          bindsTo = ["${cfg.vpnNamespace}.service"];
+          after = ["${cfg.vpnNamespace}.service"];
         };
-      }))
-      enabled;
+        "drop-ipv4-in-${cfg.vpnNamespace}-ns" = {
+          vpnConfinement = {
+            enable = true;
+            inherit (cfg) vpnNamespace;
+          };
+          wantedBy = ["${cfg.vpnNamespace}.service"];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ''
+            ${pkgs.nftables}/bin/nft -f ${pkgs.writeText "drop-ipv4.nft" ''
+              table ip filter {
+                chain output {
+                  type filter hook output priority 0;
+                  policy drop;
+                  oifname "lo" accept
+                }
+              }
+            ''}
+          '';
+        };
+      })
+      enabled);
 
     systemd.tmpfiles.rules = flatten (
       mapAttrsToList (_: cfg: [
