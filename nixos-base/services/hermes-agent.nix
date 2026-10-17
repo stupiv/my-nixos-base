@@ -357,7 +357,14 @@ in {
                 chain output {
                   type filter hook output priority 0;
                   policy drop;
-                  oifname "lo" accept
+                }
+                chain input {
+                  type filter hook input priority 0;
+                  policy drop;
+                }
+                chain forward {
+                  type filter hook forward priority 0;
+                  policy drop;
                 }
               }
             ''}
