@@ -95,9 +95,6 @@ in {
             type = types.singleLineStr;
             example = "ghcr.io/jo-inc/camofox-browser:1.18.1";
           };
-          port = mkOption {
-            type = types.port;
-          };
           envFile-key = mkOption {
             type = types.singleLineStr;
             default = "${cfg.secretsDirName}/camofox-envFile";
@@ -151,11 +148,11 @@ in {
 
   config = mkIf (enabled != {}) {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.wireguardConfigFile-key} = mkForce {inherit (cfg) sopsFile;};
-        ${cfg.hermes-agent.envFile-key} = mkForce {inherit (cfg) sopsFile;};
-        ${cfg.camofox.envFile-key} = mkForce {inherit (cfg) sopsFile;};
-        ${cfg.litellm.envFile-key} = mkForce {inherit (cfg) sopsFile;};
-        # ${cfg.firecrawl.envFile-key} = mkForce {inherit (cfg) sopsFile;};
+        ${cfg.wireguardConfigFile-key} = {inherit (cfg) sopsFile;};
+        ${cfg.hermes-agent.envFile-key} = {inherit (cfg) sopsFile;};
+        ${cfg.camofox.envFile-key} = {inherit (cfg) sopsFile;};
+        ${cfg.litellm.envFile-key} = {inherit (cfg) sopsFile;};
+        # ${cfg.firecrawl.envFile-key} =  {inherit (cfg) sopsFile;};
       })
       enabled);
 
@@ -196,9 +193,6 @@ in {
           commonAttrs
           // {
             inherit (cfg.camofox) serviceName image;
-            environment = {
-              CAMOFOX_PORT = toString cfg.camofox.port;
-            };
             environmentFiles = [outerCfg.sops.secrets.${cfg.camofox.envFile-key}.path];
             extraOptions = [
               "--shm-size=2g" # Firefox needs real shared memory; the default 64MB is not enough
@@ -281,9 +275,6 @@ in {
                 backend.mode = "serve";
                 backend.port = cfg.hermes-agent.port;
                 environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
-                environment = {
-                  CAMOFOX_URL = "http://127.0.0.1:${toString cfg.camofox.port}";
-                };
                 settings = {
                   browser = {
                     backend = "off";
