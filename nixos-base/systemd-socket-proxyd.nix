@@ -16,7 +16,7 @@ with lib; let
     };
     tcp-host = mkOption {
       type = types.nullOr types.singleLineStr;
-      default = "127.0.0.1";
+      default = "[::1]";
     };
     tcp-port = mkOption {
       type = types.nullOr types.port;

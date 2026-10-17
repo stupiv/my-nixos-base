@@ -193,6 +193,9 @@ in {
           commonAttrs
           // {
             inherit (cfg.camofox) serviceName image;
+            environment = {
+              CAMOFOX_BIND_HOST = "::1";
+            };
             environmentFiles = [outerCfg.sops.secrets.${cfg.camofox.envFile-key}.path];
             extraOptions = [
               "--shm-size=2g" # Firefox needs real shared memory; the default 64MB is not enough
@@ -267,6 +270,7 @@ in {
                 enable = true;
                 stateDir = cfg.litellm.stateDir;
                 port = cfg.litellm.port;
+                host = "::1";
                 environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
               };
               services.hermes-agent = {
@@ -274,6 +278,7 @@ in {
                 stateDir = cfg.hermes-agent.stateDir;
                 backend.mode = "serve";
                 backend.port = cfg.hermes-agent.port;
+                backend.host = "::1";
                 environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
                 settings = {
                   browser = {
