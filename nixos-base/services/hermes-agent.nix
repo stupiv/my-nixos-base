@@ -281,6 +281,9 @@ in {
                 backend.mode = "serve";
                 backend.port = cfg.hermes-agent.port;
                 environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
+                environment = {
+                  CAMOFOX_URL = "http://127.0.0.1:${toString cfg.camofox.port}";
+                };
                 settings = {
                   browser = {
                     backend = "off";
