@@ -14,19 +14,19 @@ with lib; let
       type = types.nullOr types.singleLineStr;
       default = serviceName;
     };
-    tcp-host = mkOption {
+    host = mkOption {
       type = types.nullOr types.singleLineStr;
-      default = "[::1]";
+      default = null;
     };
-    tcp-port = mkOption {
+    port = mkOption {
       type = types.nullOr types.port;
       default = null;
     };
     ip-socket = mkOption {
       type = types.singleLineStr;
       default =
-        if self.tcp-port != null
-        then "${self.tcp-host}:${toString self.tcp-port}"
+        if self.port != null && self.host != null
+        then "${self.host}:${toString self.port}"
         else null;
     };
   };

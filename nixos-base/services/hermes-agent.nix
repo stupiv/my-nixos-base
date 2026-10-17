@@ -246,26 +246,21 @@ in {
                 isReadOnly = true;
               };
             };
-            # specialArgs = {inherit inputs;};
-            config = {config, ...}: let
-              containerCfg = config;
-            in {
+            config = {config, ...}: {
               imports = [
                 inputs.hermes-agent.nixosModules.default
                 ../systemd-socket-proxyd.nix
               ];
-
               myOpt.systemd-socket-proxyd = {
                 hermes-agent = {
-                  origin.tcp-port = containerCfg.services.hermes-agent.backend.port;
+                  origin.ip-socket = "[::1]:${tostring cfg.hermes-agent.port}";
                   proxy.ip-socket = cfg.hermes-agent.ip-socket;
                 };
                 litellm = {
-                  origin.tcp-port = containerCfg.services.litellm.port;
+                  origin.ip-socket = "[::1]:${tostring cfg.litellm.port}";
                   proxy.ip-socket = cfg.litellm.ip-socket;
                 };
               };
-
               services.litellm = {
                 enable = true;
                 stateDir = cfg.litellm.stateDir;
