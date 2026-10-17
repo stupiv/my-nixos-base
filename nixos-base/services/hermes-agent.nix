@@ -85,24 +85,62 @@ in {
             readOnly = true;
           };
         };
-        litellm = {
-          stateDir = mkOption {
+        camofox = {
+          serviceName = mkOption {
             type = types.singleLineStr;
+            default = "${cfg.containerName}-camofox";
+            readOnly = true;
+          };
+          image = mkOption {
+            type = types.singleLineStr;
+            example = "ghcr.io/jo-inc/camofox-browser:1.18.1";
           };
           port = mkOption {
             type = types.port;
           };
           envFile-key = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.secretsDirName}/litellm-envFile";
-            readOnly = true;
-          };
-          ip-socket = mkOption {
-            type = types.singleLineStr;
-            default = "${cfg.socketDir}/litellm.sock";
+            default = "${cfg.secretsDirName}/camofox-envFile";
             readOnly = true;
           };
         };
+        # litellm = {
+        #   stateDir = mkOption {
+        #     type = types.singleLineStr;
+        #   };
+        #   port = mkOption {
+        #     type = types.port;
+        #   };
+        #   envFile-key = mkOption {
+        #     type = types.singleLineStr;
+        #     default = "${cfg.secretsDirName}/litellm-envFile";
+        #     readOnly = true;
+        #   };
+        #   ip-socket = mkOption {
+        #     type = types.singleLineStr;
+        #     default = "${cfg.socketDir}/litellm.sock";
+        #     readOnly = true;
+        #   };
+        # };
+        # firecrawl = {
+        #   serviceName = mkOption {
+        #     type = types.singleLineStr;
+        #     default = "${cfg.containerName}-firecrawl";
+        #     readOnly = true;
+        #   };
+        #   image = mkOption {
+        #     type = types.singleLineStr;
+        #     example = "ghcr.io/firecrawl/firecrawl:2.11.531-production";
+        #   };
+        #   port = mkOption {
+        #     type = types.port;
+        #   };
+        #   envFile-key = mkOption {
+        #     type = types.singleLineStr;
+        #     default = "${cfg.secretsDirName}/firecrawl-envFile";
+        #     readOnly = true;
+        #   };
+        # };
       };
     }));
   };
@@ -114,8 +152,10 @@ in {
   config = mkIf (enabled != {}) {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
         ${cfg.wireguardConfigFile-key} = mkForce {inherit (cfg) sopsFile;};
-        ${cfg.litellm.envFile-key} = mkForce {inherit (cfg) sopsFile;};
         ${cfg.hermes-agent.envFile-key} = mkForce {inherit (cfg) sopsFile;};
+        ${cfg.camofox.envFile-key} = mkForce {inherit (cfg) sopsFile;};
+        # ${cfg.firecrawl.envFile-key} = mkForce {inherit (cfg) sopsFile;};
+        # ${cfg.litellm.envFile-key} = mkForce {inherit (cfg) sopsFile;};
       })
       enabled);
 
@@ -130,15 +170,54 @@ in {
                   origin.socket-address = cfg.hermes-agent.ip-socket;
                   proxy.port = cfg.hermes-agent.port;
                 };
-                litellm = {
-                  origin.socket-address = cfg.litellm.ip-socket;
-                  proxy.port = cfg.litellm.port;
-                };
+                # litellm = {
+                #   origin.socket-address = cfg.litellm.ip-socket;
+                #   proxy.port = cfg.litellm.port;
+                # };
               };
             }
           ];
         }
       )
+      enabled);
+
+    virtualisation.oci-containers.backend = "podman";
+    virtualisation.oci-containers.containers = mkMerge (mapAttrsToList
+      (_: cfg: let
+        commonAttrs = {
+          autoStart = false;
+          networks = ["ns:/run/netns/${cfg.vpnNamespace}"];
+          volumes = [
+            "/etc/netns/${cfg.vpnNamespace}/resolv.conf:/etc/resolv.conf:ro"
+          ];
+        };
+      in {
+        ${cfg.camofox.serviceName} =
+          commonAttrs
+          // {
+            inherit (cfg.camofox) serviceName image;
+            environment = {
+              CAMOFOX_PORT = toString cfg.camofox.port;
+            };
+            environmentFiles = [outerCfg.sops.secrets.${cfg.camofox.envFile-key}.path];
+            extraOptions = [
+              "--shm-size=2g" # Firefox needs real shared memory; the default 64MB is not enough
+            ];
+          };
+        # ${cfg.firecrawl.serviceName} =
+        #   commonAttrs
+        #   // {
+        #     inherit (cfg.firecrawl) serviceName image;
+        #     environment = {
+        #       PORT = toString cfg.firecrawl.port;
+        #       HOST = "0.0.0.0";
+        #     };
+        #     environmentFiles = [outerCfg.sops.secrets.${cfg.firecrawl.envFile-key}.path];
+        #     # NOTE: the full self-hosted Firecrawl stack is a compose file
+        #     # (API + workers + Playwright + Redis + RabbitMQ + PostgreSQL);
+        #     # this runs only the API image.
+        #   };
+      })
       enabled);
 
     containers = mkMerge (mapAttrsToList (
@@ -153,10 +232,6 @@ in {
                 hostPath = cfg.hermes-agent.stateDir;
                 isReadOnly = false;
               };
-              ${cfg.litellm.stateDir} = {
-                hostPath = cfg.litellm.stateDir;
-                isReadOnly = false;
-              };
               ${cfg.secretsDir} = {
                 hostPath = cfg.secretsDir;
                 isReadOnly = true;
@@ -169,6 +244,10 @@ in {
                 hostPath = "/etc/netns/${cfg.vpnNamespace}/resolv.conf";
                 isReadOnly = true;
               };
+              # ${cfg.litellm.stateDir} = {
+              #   hostPath = cfg.litellm.stateDir;
+              #   isReadOnly = false;
+              # };
             };
             # specialArgs = {inherit inputs;};
             config = {config, ...}: let
@@ -184,18 +263,18 @@ in {
                   origin.tcp-port = containerCfg.services.hermes-agent.backend.port;
                   proxy.ip-socket = cfg.hermes-agent.ip-socket;
                 };
-                litellm = {
-                  origin.tcp-port = containerCfg.services.litellm.port;
-                  proxy.ip-socket = cfg.litellm.ip-socket;
-                };
+                # litellm = {
+                #   origin.tcp-port = containerCfg.services.litellm.port;
+                #   proxy.ip-socket = cfg.litellm.ip-socket;
+                # };
               };
 
-              services.litellm = {
-                # enable = true;
-                stateDir = cfg.litellm.stateDir;
-                port = cfg.litellm.port;
-                environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
-              };
+              # services.litellm = {
+              #   enable = true;
+              #   stateDir = cfg.litellm.stateDir;
+              #   port = cfg.litellm.port;
+              #   environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
+              # };
               services.hermes-agent = {
                 enable = true;
                 stateDir = cfg.hermes-agent.stateDir;
@@ -209,7 +288,7 @@ in {
                     cdp_url = "";
                     extension_control.enabled = false;
                   }; # Force (self-hosted) Camofox
-                  security.allow_lazy_installs = false; # Force Camofox
+                  security.allow_lazy_installs = false; # Force no browser install
                   web = {
                     backend = "firecrawl";
                     search_backend = "firecrawl";
@@ -255,7 +334,19 @@ in {
         ${cfg.serviceName} = {
           bindsTo = ["${cfg.vpnNamespace}.service"];
           after = ["${cfg.vpnNamespace}.service"];
+          wants = [
+            "${cfg.camofox.serviceName}.service"
+            # "${cfg.firecrawl.serviceName}.service"
+          ];
         };
+        ${cfg.camofox.serviceName} = {
+          bindsTo = ["${cfg.vpnNamespace}.service"];
+          after = ["${cfg.vpnNamespace}.service"];
+        };
+        # ${cfg.firecrawl.serviceName} = {
+        #   bindsTo = ["${cfg.vpnNamespace}.service"];
+        #   after = ["${cfg.vpnNamespace}.service"];
+        # };
         "drop-ipv4-in-${cfg.vpnNamespace}-ns" = {
           vpnConfinement = {
             enable = true;
@@ -284,8 +375,8 @@ in {
     systemd.tmpfiles.rules = flatten (
       mapAttrsToList (_: cfg: [
         "d '${cfg.hermes-agent.stateDir}' - - - - -"
-        "d '${cfg.litellm.stateDir}' - - - - -"
         "d '${cfg.socketDir}' - - - - -"
+        # "d '${cfg.litellm.stateDir}' - - - - -"
       ])
       enabled
     );
