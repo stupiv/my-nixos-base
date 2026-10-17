@@ -1,25 +1,10 @@
-{lib, ...}:
+{
+  pkgs,
+  lib,
+  ...
+}:
 with lib; let
-  mkEndpointOpt = {
-    self,
-    default-ip-socket,
-  }: {
-    port = mkOption {
-      type = types.nullOr types.port;
-      default = null;
-    };
-    host = mkOption {
-      type = types.nullOr types.singleLineStr;
-      default = null;
-    };
-    ip-socket = mkOption {
-      type = types.singleLineStr;
-      default =
-        if self.host != null && self.port != null
-        then "${self.host}:${toString self.port}"
-        else default-ip-socket;
-    };
-  };
+  inherit (pkgs.myLib) mkEndpointOpt;
 in {
   options.myOpt.sleep-on-idle = mkOption {
     default = {};
@@ -45,13 +30,14 @@ in {
           }: {
             options = {
               origin = mkEndpointOpt {
-                self = config.origin;
-                default-ip-socket = null;
+                cfg = config.origin;
+                ipv6-brackes = false; # proxyd dial target: no brackets
               };
               proxy =
                 (mkEndpointOpt {
-                  self = config.proxy;
+                  cfg = config.proxy;
                   default-ip-socket = "/run/sleep-on-idle/${serviceName}/${name}.sock";
+                  ipv6-brackes = true; # ListenStream=: brackets required
                 })
                 // {
                   name = mkOption {
@@ -73,11 +59,12 @@ in {
         };
         health-check =
           (mkEndpointOpt {
-            self = config.health-check;
+            cfg = config.health-check;
             default-ip-socket =
               if config.endpoints ? default
               then config.endpoints.default.origin.ip-socket
               else null;
+            ipv6-brackes = true; # curl URL: brackets required
           })
           // {
             sleep = mkOption {

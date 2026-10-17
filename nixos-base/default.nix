@@ -1,5 +1,6 @@
 {
   imports = [
+    ../myLib
     ./2511
     ./dnscrypt
     ./services

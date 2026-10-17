@@ -5,31 +5,15 @@
   ...
 }:
 with lib; let
+  inherit (pkgs.myLib) mkEndpointOpt;
   enabled = filterAttrs (_: cfg: cfg.enable) config.myOpt.systemd-socket-proxyd;
-  mkEndpointOpt = {
-    self,
-    serviceName,
-  }: {
-    serviceName = mkOption {
-      type = types.nullOr types.singleLineStr;
-      default = serviceName;
-    };
-    host = mkOption {
-      type = types.nullOr types.singleLineStr;
-      default = null;
-    };
-    port = mkOption {
-      type = types.nullOr types.port;
-      default = null;
-    };
-    ip-socket = mkOption {
-      type = types.singleLineStr;
-      default =
-        if self.port != null && self.host != null
-        then "${self.host}:${toString self.port}"
-        else null;
-    };
-  };
+  custom-mkEndpointOpt = args: ((mkEndpointOpt args)
+    // {
+      serviceName = mkOption {
+        type = types.nullOr types.singleLineStr;
+        default = args.serviceName;
+      };
+    });
 in {
   options.myOpt.systemd-socket-proxyd = mkOption {
     default = {};
@@ -45,13 +29,15 @@ in {
           type = types.bool;
           default = true;
         };
-        origin = mkEndpointOpt {
-          self = cfg.origin;
+        origin = custom-mkEndpointOpt {
+          cfg = cfg.origin;
           serviceName = name;
+          ipv6-brackes = false; # proxyd dial target: no brackets
         };
-        proxy = mkEndpointOpt {
-          self = cfg.proxy;
+        proxy = custom-mkEndpointOpt {
+          cfg = cfg.proxy;
           serviceName = "${cfg.origin.serviceName}-proxy";
+          ipv6-brackes = true; # ListenStream=: brackets required
         };
       };
     }));
