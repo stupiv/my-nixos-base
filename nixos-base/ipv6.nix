@@ -27,8 +27,10 @@ in {
   };
 
   config = {
-    services.dnscrypt-proxy.settings.ipv6_servers = cfg.enable; # Use servers reachable over IPv6 -- Do not enable if you don't have IPv6 connectivity
-    networking.enableIPv6 = cfg.enable;
+    services.dnscrypt-proxy.settings = {
+      ipv6_servers = cfg.enable; # Use servers reachable over IPv6 -- Do not enable if you don't have IPv6 connectivity
+      block_ipv6 = ! cfg.enable;
+    };
 
     networking.interfaces = mkIf (cfg.enable && cfg.public.enable) {
       ${cfg.interface}.ipv6.addresses = [
