@@ -104,24 +104,24 @@ in {
             readOnly = true;
           };
         };
-        # litellm = {
-        #   stateDir = mkOption {
-        #     type = types.singleLineStr;
-        #   };
-        #   port = mkOption {
-        #     type = types.port;
-        #   };
-        #   envFile-key = mkOption {
-        #     type = types.singleLineStr;
-        #     default = "${cfg.secretsDirName}/litellm-envFile";
-        #     readOnly = true;
-        #   };
-        #   ip-socket = mkOption {
-        #     type = types.singleLineStr;
-        #     default = "${cfg.socketDir}/litellm.sock";
-        #     readOnly = true;
-        #   };
-        # };
+        litellm = {
+          stateDir = mkOption {
+            type = types.singleLineStr;
+          };
+          port = mkOption {
+            type = types.port;
+          };
+          envFile-key = mkOption {
+            type = types.singleLineStr;
+            default = "${cfg.secretsDirName}/litellm-envFile";
+            readOnly = true;
+          };
+          ip-socket = mkOption {
+            type = types.singleLineStr;
+            default = "${cfg.socketDir}/litellm.sock";
+            readOnly = true;
+          };
+        };
         # firecrawl = {
         #   serviceName = mkOption {
         #     type = types.singleLineStr;
@@ -154,8 +154,8 @@ in {
         ${cfg.wireguardConfigFile-key} = mkForce {inherit (cfg) sopsFile;};
         ${cfg.hermes-agent.envFile-key} = mkForce {inherit (cfg) sopsFile;};
         ${cfg.camofox.envFile-key} = mkForce {inherit (cfg) sopsFile;};
+        ${cfg.litellm.envFile-key} = mkForce {inherit (cfg) sopsFile;};
         # ${cfg.firecrawl.envFile-key} = mkForce {inherit (cfg) sopsFile;};
-        # ${cfg.litellm.envFile-key} = mkForce {inherit (cfg) sopsFile;};
       })
       enabled);
 
@@ -170,10 +170,10 @@ in {
                   origin.socket-address = cfg.hermes-agent.ip-socket;
                   proxy.port = cfg.hermes-agent.port;
                 };
-                # litellm = {
-                #   origin.socket-address = cfg.litellm.ip-socket;
-                #   proxy.port = cfg.litellm.port;
-                # };
+                litellm = {
+                  origin.socket-address = cfg.litellm.ip-socket;
+                  proxy.port = cfg.litellm.port;
+                };
               };
             }
           ];
@@ -232,6 +232,10 @@ in {
                 hostPath = cfg.hermes-agent.stateDir;
                 isReadOnly = false;
               };
+              ${cfg.litellm.stateDir} = {
+                hostPath = cfg.litellm.stateDir;
+                isReadOnly = false;
+              };
               ${cfg.secretsDir} = {
                 hostPath = cfg.secretsDir;
                 isReadOnly = true;
@@ -244,10 +248,6 @@ in {
                 hostPath = "/etc/netns/${cfg.vpnNamespace}/resolv.conf";
                 isReadOnly = true;
               };
-              # ${cfg.litellm.stateDir} = {
-              #   hostPath = cfg.litellm.stateDir;
-              #   isReadOnly = false;
-              # };
             };
             # specialArgs = {inherit inputs;};
             config = {config, ...}: let
@@ -263,18 +263,18 @@ in {
                   origin.tcp-port = containerCfg.services.hermes-agent.backend.port;
                   proxy.ip-socket = cfg.hermes-agent.ip-socket;
                 };
-                # litellm = {
-                #   origin.tcp-port = containerCfg.services.litellm.port;
-                #   proxy.ip-socket = cfg.litellm.ip-socket;
-                # };
+                litellm = {
+                  origin.tcp-port = containerCfg.services.litellm.port;
+                  proxy.ip-socket = cfg.litellm.ip-socket;
+                };
               };
 
-              # services.litellm = {
-              #   enable = true;
-              #   stateDir = cfg.litellm.stateDir;
-              #   port = cfg.litellm.port;
-              #   environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
-              # };
+              services.litellm = {
+                enable = true;
+                stateDir = cfg.litellm.stateDir;
+                port = cfg.litellm.port;
+                environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
+              };
               services.hermes-agent = {
                 enable = true;
                 stateDir = cfg.hermes-agent.stateDir;
@@ -376,7 +376,7 @@ in {
       mapAttrsToList (_: cfg: [
         "d '${cfg.hermes-agent.stateDir}' - - - - -"
         "d '${cfg.socketDir}' - - - - -"
-        # "d '${cfg.litellm.stateDir}' - - - - -"
+        "d '${cfg.litellm.stateDir}' - - - - -"
       ])
       enabled
     );
