@@ -135,7 +135,7 @@ in {
             port = mkOption {
               type = types.port;
             };
-            listen-address = mkOption {
+            host = mkOption {
               type = types.singleLineStr;
               default = "127.0.0.1";
             };
@@ -291,7 +291,7 @@ in {
           sleep-on-idle = {
             health-check.path = "/api/method/ping";
             endpoints.default.origin = {
-              inherit (cfg.frappe.frontend) port listen-address;
+              inherit (cfg.frappe.frontend) port host;
             };
             dependsOn =
               (with cfg; [
@@ -582,7 +582,7 @@ in {
                 PROXY_READ_TIMEOUT = "120";
                 CLIENT_MAX_BODY_SIZE = "50m";
               };
-              ports = ["${cfg.frappe.frontend.listen-address}:${toString cfg.frappe.frontend.port}:8080"];
+              ports = ["${cfg.frappe.frontend.host}:${toString cfg.frappe.frontend.port}:8080"];
             }
           ];
         }

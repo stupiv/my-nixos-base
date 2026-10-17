@@ -7,10 +7,10 @@
 with lib; let
   enabled-cloudflared-proxy-compose = filterAttrs (name: cfg: cfg.cloudflared.enable) config.myOpt.proxy-compose;
 
-  to-caddy-socket-address = socket-address: (
-    if (hasPrefix "/" socket-address)
-    then "unix/${socket-address}"
-    else socket-address
+  to-caddy-ip-socket = ip-socket: (
+    if (hasPrefix "/" ip-socket)
+    then "unix/${ip-socket}"
+    else ip-socket
   );
 in {
   options.myOpt.proxy-compose = mkOption {
@@ -94,13 +94,13 @@ in {
             default = "16MiB";
           };
         };
-        default-caddy-origin-socket-address = mkOption {
+        default-caddy-origin-ip-socket = mkOption {
           type = types.nullOr (types.strMatching "^[^\/].+$");
           default = let
             inherit (config.myOpt.sleep-on-idle.${name}) endpoints;
           in (
             if endpoints ? default
-            then to-caddy-socket-address endpoints.default.proxy.socket-address
+            then to-caddy-ip-socket endpoints.default.proxy.ip-socket
             else null
           );
           readOnly = true;
@@ -140,7 +140,7 @@ in {
 
     services.caddy = mkMerge (mapAttrsToList (
         _: cfg: let
-          inherit (cfg) localMode caddy cloudflared hostName default-caddy-origin-socket-address;
+          inherit (cfg) localMode caddy cloudflared hostName default-caddy-origin-ip-socket;
           inherit (cfg.caddy) add-handle-reverse-proxy add-encode request_body;
           extraConfig = ''
             ${caddy.extraConfig}
@@ -151,7 +151,7 @@ in {
               if add-handle-reverse-proxy
               then ''
                 handle {
-                  reverse_proxy ${default-caddy-origin-socket-address}
+                  reverse_proxy ${default-caddy-origin-ip-socket}
                 }
               ''
               else ''''

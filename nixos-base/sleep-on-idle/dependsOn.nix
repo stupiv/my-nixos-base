@@ -15,7 +15,7 @@ with lib; {
             StopWhenUnneeded = false;
           };
           serviceConfig = {
-            Slice = mkIf (cfg.sliceName != null) "${cfg.sliceName}.slice";
+            Slice = mkIf (cfg.sliceName != null) (mkForce "${cfg.sliceName}.slice");
             RemainAfterExit = true;
           };
         };

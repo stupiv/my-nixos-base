@@ -56,9 +56,9 @@ in {
           default = "container@${cfg.container.name}";
           readOnly = true;
         };
-        origin.socket-address = mkOption {
+        origin.ip-socket = mkOption {
           type = types.singleLineStr;
-          default = "/run/${cfg.container.name}${cfg.container.origin.socket-address}";
+          default = "/run/${cfg.container.name}${cfg.container.origin.ip-socket}";
           readOnly = true;
         };
         container = {
@@ -66,7 +66,7 @@ in {
             type = types.singleLineStr;
             default = name;
           };
-          origin.socket-address = mkOption {
+          origin.ip-socket = mkOption {
             type = types.singleLineStr;
             default = containerCfg.services.phpfpm.pools."wordpress-${cfg.proxy-compose.hostName}".socket;
             readOnly = true;
@@ -210,7 +210,7 @@ in {
                   root * ${containerCfg.services.wordpress.sites.${cfg.proxy-compose.hostName}.finalPackage}/share/wordpress
                   file_server
 
-                  php_fastcgi ${config.myOpt.proxy-compose.${cfg.serviceName}.default-caddy-origin-socket-address}
+                  php_fastcgi ${config.myOpt.proxy-compose.${cfg.serviceName}.default-caddy-origin-ip-socket}
 
                   @uploads-php {
                     path_regexp path /uploads/(?:.*)\.php
@@ -244,8 +244,8 @@ in {
               hostPath = cfg.mariadb.stateDir;
               isReadOnly = false;
             };
-            ${builtins.dirOf cfg.container.origin.socket-address} = {
-              hostPath = builtins.dirOf cfg.origin.socket-address;
+            ${builtins.dirOf cfg.container.origin.ip-socket} = {
+              hostPath = builtins.dirOf cfg.origin.ip-socket;
               isReadOnly = false;
             };
           };
@@ -350,7 +350,7 @@ in {
         "d '${cfg.wordpress.fontsDir}' - - - - -"
         "d '${cfg.wordpress.uploadsDir}' - - - - -"
         "d '${cfg.mariadb.stateDir}' - - - - -"
-        "d '${builtins.dirOf cfg.origin.socket-address}' - - - - -"
+        "d '${builtins.dirOf cfg.origin.ip-socket}' - - - - -"
       ]
       ++ (map (
           wp_path: "d '${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostName}${wp_path}' - - - - -"

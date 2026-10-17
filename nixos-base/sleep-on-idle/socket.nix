@@ -9,7 +9,7 @@ with lib; {
       inherit (cfg2) proxy;
     in (nameValuePair proxy.name {
       wantedBy = ["sockets.target"];
-      listenStreams = [proxy.socket-address];
+      listenStreams = [proxy.ip-socket];
       socketConfig = {
         TriggerLimitBurst = 0;
         NoDelay = true;

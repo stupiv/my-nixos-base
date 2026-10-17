@@ -145,7 +145,7 @@ in {
           sleep-on-idle = {
             health-check.path = "/api";
             endpoints.default = {
-              origin.socket-address = "${cfg.chatwoot.socket-folder}/${cfg.chatwoot.socket-filename}";
+              origin.ip-socket = "${cfg.chatwoot.socket-folder}/${cfg.chatwoot.socket-filename}";
             };
             dependsOn = [
               cfg.chatwoot.sidekiq.serviceName

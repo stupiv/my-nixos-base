@@ -50,7 +50,7 @@ in {
             default = "${name}-n8n";
             readOnly = true;
           };
-          listen-address = mkOption {
+          host = mkOption {
             type = types.singleLineStr;
             default = "127.0.0.1";
           };
@@ -78,9 +78,9 @@ in {
             default = null;
           };
         };
-        default-caddy-origin-socket-address = mkOption {
+        default-caddy-origin-ip-socket = mkOption {
           type = types.singleLineStr;
-          default = outerCfg.myOpt.proxy-compose.${config.n8n.serviceName}.default-caddy-origin-socket-address;
+          default = outerCfg.myOpt.proxy-compose.${config.n8n.serviceName}.default-caddy-origin-ip-socket;
           readOnly = true;
         };
       };
@@ -98,7 +98,7 @@ in {
           sleep-on-idle = {
             health-check.path = "/healthz/readiness";
             endpoints.default.origin = {
-              inherit (cfg.n8n) listen-address port;
+              inherit (cfg.n8n) host port;
             };
           };
           caddy = {
@@ -144,7 +144,7 @@ in {
               "${cfg.n8n._home_node_dotn8n}:${in-container_home_node_dotn8n}"
               "${cfg.n8n._home_node_dotn8n-files}:${in-container_home_node_dotn8n-files}"
             ];
-            ports = ["${cfg.n8n.listen-address}:${toString cfg.n8n.port}:${toString cfg.n8n.port}"];
+            ports = ["${cfg.n8n.host}:${toString cfg.n8n.port}:${toString cfg.n8n.port}"];
           };
         }
       )

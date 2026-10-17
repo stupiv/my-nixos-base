@@ -79,9 +79,14 @@ in {
             default = "${cfg.secretsDirName}/hermes-agent-envFile";
             readOnly = true;
           };
-          ip-socket = mkOption {
+          unix-socket = mkOption {
             type = types.singleLineStr;
             default = "${cfg.socketDir}/hermes-agent.sock";
+            readOnly = true;
+          };
+          host = mkOption {
+            type = types.singleLineStr;
+            default = "::1";
             readOnly = true;
           };
         };
@@ -113,9 +118,14 @@ in {
             default = "${cfg.secretsDirName}/litellm-envFile";
             readOnly = true;
           };
-          ip-socket = mkOption {
+          unix-socket = mkOption {
             type = types.singleLineStr;
             default = "${cfg.socketDir}/litellm.sock";
+            readOnly = true;
+          };
+          host = mkOption {
+            type = types.singleLineStr;
+            default = "::1";
             readOnly = true;
           };
         };
@@ -161,15 +171,19 @@ in {
           ${cfg.serviceName} = mkMerge [
             cfg.sleep-on-idle
             {
+              dependsOn = [
+                cfg.camofox.serviceName
+                # cfg.firecrawl.serviceName
+              ];
               health-check.path = "/";
               endpoints = {
                 default = {
-                  origin.socket-address = cfg.hermes-agent.ip-socket;
-                  proxy.port = cfg.hermes-agent.port;
+                  origin.ip-socket = cfg.hermes-agent.unix-socket;
+                  proxy = {inherit (cfg.hermes-agent) host port;};
                 };
                 litellm = {
-                  origin.socket-address = cfg.litellm.ip-socket;
-                  proxy.port = cfg.litellm.port;
+                  origin.ip-socket = cfg.litellm.unix-socket;
+                  proxy = {inherit (cfg.litellm) host port;};
                 };
               };
             }
@@ -253,27 +267,26 @@ in {
               ];
               myOpt.systemd-socket-proxyd = {
                 hermes-agent = {
-                  origin.ip-socket = "[::1]:${tostring cfg.hermes-agent.port}";
-                  proxy.ip-socket = cfg.hermes-agent.ip-socket;
+                  origin = {inherit (cfg.hermes-agent) host port;};
+                  proxy.ip-socket = cfg.hermes-agent.unix-socket;
                 };
                 litellm = {
-                  origin.ip-socket = "[::1]:${tostring cfg.litellm.port}";
-                  proxy.ip-socket = cfg.litellm.ip-socket;
+                  origin = {inherit (cfg.litellm) host port;};
+                  proxy.ip-socket = cfg.litellm.unix-socket;
                 };
               };
               services.litellm = {
+                inherit (cfg.litellm) stateDir host port;
                 enable = true;
-                stateDir = cfg.litellm.stateDir;
-                port = cfg.litellm.port;
-                host = "::1";
                 environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
               };
               services.hermes-agent = {
+                inherit (cfg.hermes-agent) stateDir;
                 enable = true;
-                stateDir = cfg.hermes-agent.stateDir;
-                backend.mode = "serve";
-                backend.port = cfg.hermes-agent.port;
-                backend.host = "::1";
+                backend = {
+                  inherit (cfg.hermes-agent) host port;
+                  mode = "serve";
+                };
                 environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
                 settings = {
                   browser = {

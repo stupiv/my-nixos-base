@@ -2,26 +2,22 @@
 with lib; let
   mkEndpointOpt = {
     self,
-    default-socket-address,
+    default-ip-socket,
   }: {
     port = mkOption {
       type = types.nullOr types.port;
       default = null;
     };
-    listen-address = mkOption {
+    host = mkOption {
       type = types.nullOr types.singleLineStr;
-      default = "127.0.0.1";
-      # default =
-      #   if config.networking.enableIPv6
-      #   then "[::1]"
-      #   else "127.0.0.1";
+      default = null;
     };
-    socket-address = mkOption {
+    ip-socket = mkOption {
       type = types.singleLineStr;
       default =
-        if self.port != null
-        then "${self.listen-address}:${toString self.port}"
-        else default-socket-address;
+        if self.host != null && self.port != null
+        then "${self.host}:${toString self.port}"
+        else default-ip-socket;
     };
   };
 in {
@@ -50,12 +46,12 @@ in {
             options = {
               origin = mkEndpointOpt {
                 self = config.origin;
-                default-socket-address = null;
+                default-ip-socket = null;
               };
               proxy =
                 (mkEndpointOpt {
                   self = config.proxy;
-                  default-socket-address = "/run/sleep-on-idle/${serviceName}/${name}.sock";
+                  default-ip-socket = "/run/sleep-on-idle/${serviceName}/${name}.sock";
                 })
                 // {
                   name = mkOption {
@@ -78,9 +74,9 @@ in {
         health-check =
           (mkEndpointOpt {
             self = config.health-check;
-            default-socket-address =
+            default-ip-socket =
               if config.endpoints ? default
-              then config.endpoints.default.origin.socket-address
+              then config.endpoints.default.origin.ip-socket
               else null;
           })
           // {
@@ -95,6 +91,9 @@ in {
         dependsOn = mkOption {
           type = types.listOf types.singleLineStr;
           default = [];
+          example = [
+            "a-service-without-dot-service"
+          ];
         };
         sliceName = mkOption {
           type = types.nullOr types.singleLineStr;
