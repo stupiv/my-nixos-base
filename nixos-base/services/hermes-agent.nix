@@ -64,9 +64,6 @@ in {
           default = "${cfg.secretsDirName}/wireguardConfigFile";
           readOnly = true;
         };
-        port = mkOption {
-          type = types.port;
-        };
         hermes-agent = {
           stateDir = mkOption {
             type = types.singleLineStr;
@@ -88,6 +85,34 @@ in {
             type = types.singleLineStr;
             default = "::1";
             readOnly = true;
+          };
+          settings = mkOption {
+            type = types.anything;
+            default = {};
+            apply = mergeAttrs {
+              web = {
+                backend = "";
+                search_backend = "";
+                extract_backend = "";
+              };
+              browser.cloud_provider = "camofox";
+              display.busy_input_mode = "steer";
+              model = {
+                default = "";
+                provider = "";
+                base_url = "";
+                api_mode = "";
+              };
+              agent = {
+                reasoning_effort = "none"; # most efficient
+                service_tier = "";
+              };
+              telemetry.shared_metrics = {
+                enabled = true;
+                send = true;
+              };
+              moa.presets.default.enabled = false;
+            };
           };
         };
         camofox = {
@@ -209,6 +234,7 @@ in {
             inherit (cfg.camofox) serviceName image;
             environment = {
               CAMOFOX_BIND_HOST = "::1";
+              CAMOFOX_PORT = "11982";
             };
             environmentFiles = [outerCfg.sops.secrets.${cfg.camofox.envFile-key}.path];
             extraOptions = [
@@ -281,43 +307,18 @@ in {
                 environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
               };
               services.hermes-agent = {
-                inherit (cfg.hermes-agent) stateDir;
+                inherit (cfg.hermes-agent) stateDir settings;
                 enable = true;
                 backend = {
                   inherit (cfg.hermes-agent) host port;
                   mode = "serve";
                 };
-                environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
-                settings = {
-                  browser = {
-                    backend = "off";
-                    cloud_provider = "camofox";
-                    cdp_url = "";
-                    extension_control.enabled = false;
-                  }; # Force (self-hosted) Camofox
-                  security.allow_lazy_installs = false; # Force no browser install
-                  web = {
-                    backend = "firecrawl";
-                    search_backend = "firecrawl";
-                    extract_backend = "firecrawl";
-                  }; # Force (self-hosted) Firecrawl
-                  display.busy_input_mode = "steer";
-                  model = {
-                    default = "";
-                    provider = "";
-                    base_url = "";
-                    api_mode = "";
-                  };
-                  agent = {
-                    reasoning_effort = "none"; # More secure (AI safety), efficient and fast
-                    service_tier = "";
-                  };
-                  telemetry.shared_metrics = {
-                    enabled = true;
-                    send = true;
-                  };
-                  moa.presets.default.enabled = false;
+                environment = {
+                  CAMOFOX_URL = let
+                    inherit (outerCfg.virtualisation.oci-containers.containers.${cfg.camofox.serviceName}.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
+                  in "http://[${CAMOFOX_BIND_HOST}]:${CAMOFOX_PORT}";
                 };
+                environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
               };
             };
           };

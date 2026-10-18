@@ -31,13 +31,13 @@ in {
             options = {
               origin = mkEndpointOpt {
                 cfg = config.origin;
-                ipv6-brackes = false; # proxyd dial target: no brackets
+                ipv6-brackets = false; # proxyd dial target: no brackets
               };
               proxy =
                 (mkEndpointOpt {
                   cfg = config.proxy;
                   default-ip-socket = "/run/sleep-on-idle/${serviceName}/${name}.sock";
-                  ipv6-brackes = true; # ListenStream=: brackets required
+                  ipv6-brackets = true; # ListenStream=: brackets required
                 })
                 // {
                   name = mkOption {
@@ -64,7 +64,7 @@ in {
               if config.endpoints ? default
               then config.endpoints.default.origin.ip-socket
               else null;
-            ipv6-brackes = true; # curl URL: brackets required
+            ipv6-brackets = true; # curl URL: brackets required
           })
           // {
             sleep = mkOption {

@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   utils,
   ...
 }:
@@ -15,6 +16,8 @@ with lib; let
       };
     });
 in {
+  imports = [../myLib];
+
   options.myOpt.systemd-socket-proxyd = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({
@@ -32,12 +35,12 @@ in {
         origin = custom-mkEndpointOpt {
           cfg = cfg.origin;
           serviceName = name;
-          ipv6-brackes = false; # proxyd dial target: no brackets
+          ipv6-brackets = false; # proxyd dial target: no brackets
         };
         proxy = custom-mkEndpointOpt {
           cfg = cfg.proxy;
           serviceName = "${cfg.origin.serviceName}-proxy";
-          ipv6-brackes = true; # ListenStream=: brackets required
+          ipv6-brackets = true; # ListenStream=: brackets required
         };
       };
     }));
