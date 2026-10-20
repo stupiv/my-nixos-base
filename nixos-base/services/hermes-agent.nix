@@ -1,25 +1,29 @@
-# - [ ]
-# - [ ] Creating a network namespace and a parent cgroup is a separate service. ipv6-only is optional. wireguard is optional. sleep-on-idle and heath-check on the module too.
-# - [ ] Modularize
-# - [ ] extraOptions = [ "--cgroup-parent=${sliceName}.slice" ];
-# - [ ] `systemctl status ${cfg.serviceName}.slice` does not look right
-# - [ ] Leverage camofox for fastcrw
-# - [ ] searxng for fastcrw
-# - [ ] fastcrw/crw in place of firecrawl
-# - [ ] Keep fastcrw stateless
-# - [ ] qdrant/qdrant for external memory
-# - [ ] user option. set uid and gid for hermes inside and outside container. Let the the user join the hermes group outside.
 {
   config,
   lib,
-  pkgs,
   inputs,
   ...
 }:
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.hermes-agent-compose;
+  toSliceName = p:
+    removeSuffix ".slice" p;
+  toSliceUnit = p:
+    if p == null
+    then null
+    else if hasSuffix ".slice" p
+    then p
+    else "${p}.slice";
 in {
+  imports = [
+    ./netns.nix
+    ./camofox.nix
+    ./litellm.nix
+    ./fastcrw.nix
+    ./qdrant.nix
+  ];
+
   options.myOpt.hermes-agent-compose = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
@@ -34,28 +38,46 @@ in {
           type = types.anything;
           default = {};
         };
-        serviceName = mkOption {
-          type = types.singleLineStr;
-          default = "container@${name}";
-          readOnly = true;
-        };
-        sopsFile = mkOption {
-          type = types.anything;
-        };
-        vpnNamespace = mkOption {
-          type = types.anything;
-          default =
-            if builtins.stringLength name < 8
-            then name
-            else "v${builtins.substring 0 6 (builtins.hashString "sha256" name)}";
-          readOnly = true;
-        };
-        secretsDirName = mkOption {
+        containerName = mkOption {
           type = types.singleLineStr;
           default = name;
           readOnly = true;
         };
-        containerName = mkOption {
+        serviceName = mkOption {
+          type = types.singleLineStr;
+          default = "container@${cfg.containerName}";
+          readOnly = true;
+        };
+        # Dedicated non-templated slice name (avoids invalid `container@<name>.slice`).
+        # Inspect with: `systemctl status ${cfg.sliceName}.slice`
+        sliceName = mkOption {
+          type = types.singleLineStr;
+          default = "hermes-agent-${name}";
+        };
+        cgroup-parent = mkOption {
+          type = types.nullOr types.singleLineStr;
+          default = "${cfg.sliceName}.slice";
+        };
+        networkNamespace = mkOption {
+          type = types.nullOr types.singleLineStr;
+          default = name;
+        };
+        netns = {
+          ipv6-only = mkOption {
+            type = types.bool;
+            default = false;
+          };
+          wireguard = {
+            enable = mkOption {
+              type = types.bool;
+              default = false;
+            };
+          };
+        };
+        sopsFile = mkOption {
+          type = types.anything;
+        };
+        secretsDirName = mkOption {
           type = types.singleLineStr;
           default = name;
           readOnly = true;
@@ -67,15 +89,29 @@ in {
         };
         secretsDir = mkOption {
           type = types.singleLineStr;
-          default = builtins.dirOf outerCfg.sops.secrets.${cfg.wireguardConfigFile-key}.path;
+          default = builtins.dirOf outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path;
           readOnly = true;
         };
-        wireguardConfigFile-key = mkOption {
-          type = types.singleLineStr;
-          default = "${cfg.secretsDirName}/wireguardConfigFile";
-          readOnly = true;
+        # Host interactive user who joins the hermes group outside the container
+        user = mkOption {
+          type = types.nullOr types.singleLineStr;
+          default = null;
         };
         hermes-agent = {
+          user = mkOption {
+            type = types.singleLineStr;
+            default = "hermes-${name}";
+          };
+          group = mkOption {
+            type = types.singleLineStr;
+            default = "hermes-${name}";
+          };
+          uid = mkOption {
+            type = types.int;
+          };
+          gid = mkOption {
+            type = types.int;
+          };
           stateDir = mkOption {
             type = types.singleLineStr;
           };
@@ -100,46 +136,42 @@ in {
           settings = mkOption {
             type = types.anything;
             default = {};
-            apply = mergeAttrs {
-              web = {
-                backend = "";
-                search_backend = "";
-                extract_backend = "";
-              };
-              browser.cloud_provider = "camofox";
-              display.busy_input_mode = "steer";
-              model = {
-                default = "";
-                provider = "";
-                base_url = "";
-                api_mode = "";
-              };
-              agent = {
-                reasoning_effort = "none"; # most efficient
-                service_tier = "";
-              };
-              telemetry.shared_metrics = {
-                enabled = true;
-                send = true;
-              };
-              moa.presets.default.enabled = false;
-            };
+            apply = userSettings:
+              recursiveUpdate {
+                web = {
+                  backend = "firecrawl";
+                  search_backend = "firecrawl";
+                  extract_backend = "firecrawl";
+                };
+                browser.cloud_provider = "camofox";
+                display.busy_input_mode = "steer";
+                model = {
+                  default = "";
+                  provider = "openai";
+                  base_url = "${outerCfg.myOpt.litellm.${name}.url}/v1";
+                  api_mode = "";
+                };
+                agent = {
+                  reasoning_effort = "none"; # most efficient
+                  service_tier = "";
+                };
+                telemetry.shared_metrics = {
+                  enabled = true;
+                  send = true;
+                };
+                moa.presets.default.enabled = false;
+              }
+              userSettings;
           };
         };
         camofox = {
-          serviceName = mkOption {
-            type = types.singleLineStr;
-            default = "${cfg.containerName}-camofox";
-            readOnly = true;
-          };
           image = mkOption {
             type = types.singleLineStr;
             example = "ghcr.io/jo-inc/camofox-browser:1.18.1";
           };
-          envFile-key = mkOption {
-            type = types.singleLineStr;
-            default = "${cfg.secretsDirName}/camofox-envFile";
-            readOnly = true;
+          port = mkOption {
+            type = types.port;
+            default = 11982;
           };
         };
         litellm = {
@@ -149,163 +181,224 @@ in {
           port = mkOption {
             type = types.port;
           };
-          envFile-key = mkOption {
-            type = types.singleLineStr;
-            default = "${cfg.secretsDirName}/litellm-envFile";
-            readOnly = true;
-          };
-          unix-socket = mkOption {
-            type = types.singleLineStr;
-            default = "${cfg.socketDir}/litellm.sock";
-            readOnly = true;
-          };
-          host = mkOption {
-            type = types.singleLineStr;
-            default = "::1";
-            readOnly = true;
+          settings = mkOption {
+            type = types.anything;
+            default = {};
           };
         };
-        # firecrawl = {
-        #   serviceName = mkOption {
-        #     type = types.singleLineStr;
-        #     default = "${cfg.containerName}-firecrawl";
-        #     readOnly = true;
-        #   };
-        #   image = mkOption {
-        #     type = types.singleLineStr;
-        #     example = "ghcr.io/firecrawl/firecrawl:2.11.531-production";
-        #   };
-        #   port = mkOption {
-        #     type = types.port;
-        #   };
-        #   envFile-key = mkOption {
-        #     type = types.singleLineStr;
-        #     default = "${cfg.secretsDirName}/firecrawl-envFile";
-        #     readOnly = true;
-        #   };
-        # };
+        fastcrw = {
+          enable = mkOption {
+            type = types.bool;
+            default = true;
+          };
+          image = mkOption {
+            type = types.singleLineStr;
+            default = "ghcr.io/fastcrw/crw:latest";
+          };
+          port = mkOption {
+            type = types.port;
+            default = 21023;
+          };
+          searxng = {
+            enable = mkOption {
+              type = types.bool;
+              default = true;
+            };
+            port = mkOption {
+              type = types.port;
+              default = 8080;
+            };
+          };
+        };
+        qdrant = {
+          enable = mkOption {
+            type = types.bool;
+            default = true;
+          };
+          image = mkOption {
+            type = types.singleLineStr;
+            default = "docker.io/qdrant/qdrant:latest";
+          };
+          stateDir = mkOption {
+            type = types.singleLineStr;
+          };
+          httpPort = mkOption {
+            type = types.port;
+            default = 6333;
+          };
+          grpcPort = mkOption {
+            type = types.port;
+            default = 6334;
+          };
+          collectionName = mkOption {
+            type = types.singleLineStr;
+            default = "hermes-${name}";
+          };
+        };
       };
     }));
   };
 
-  imports = [
-    inputs.vpn-confinement.nixosModules.default
-  ];
-
   config = mkIf (enabled != {}) {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.wireguardConfigFile-key} = {inherit (cfg) sopsFile;};
         ${cfg.hermes-agent.envFile-key} = {inherit (cfg) sopsFile;};
-        ${cfg.camofox.envFile-key} = {inherit (cfg) sopsFile;};
-        ${cfg.litellm.envFile-key} = {inherit (cfg) sopsFile;};
-        # ${cfg.firecrawl.envFile-key} =  {inherit (cfg) sopsFile;};
       })
       enabled);
 
-    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (
-        _: cfg: {
-          ${cfg.serviceName} = mkMerge [
-            cfg.sleep-on-idle
-            {
-              dependsOn = [
-                cfg.camofox.serviceName
-                # cfg.firecrawl.serviceName
-              ];
-              health-check.path = "/";
-              endpoints = {
-                default = {
-                  origin.ip-socket = cfg.hermes-agent.unix-socket;
-                  proxy = {inherit (cfg.hermes-agent) host port;};
-                };
-                litellm = {
-                  origin.ip-socket = cfg.litellm.unix-socket;
-                  proxy = {inherit (cfg.litellm) host port;};
-                };
+    # ── Host-side matching user/group + host interactive user membership ──
+    users.groups = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.hermes-agent.group} = {
+          inherit (cfg.hermes-agent) gid;
+        };
+      })
+      enabled);
+
+    users.users = mkMerge (mapAttrsToList (_: cfg:
+      {
+        ${cfg.hermes-agent.user} = {
+          isSystemUser = true;
+          inherit (cfg.hermes-agent) uid group;
+          home = cfg.hermes-agent.stateDir;
+        };
+      }
+      // optionalAttrs (cfg.user != null) {
+        ${cfg.user}.extraGroups = [cfg.hermes-agent.group];
+      })
+    enabled);
+
+    # ── Compose extracted modules ─────────────────────────────────────────
+    myOpt.netns = mkMerge (mapAttrsToList (
+        name: cfg:
+          optionalAttrs (cfg.networkNamespace == name) {
+            ${name} = {
+              enable = true;
+              inherit (cfg.netns) ipv6-only;
+              wireguard = {
+                inherit (cfg.netns.wireguard) enable;
+                sopsFile =
+                  if cfg.netns.wireguard.enable
+                  then cfg.sopsFile
+                  else null;
+                secretsDirName = cfg.secretsDirName;
               };
-            }
-          ];
-        }
+            };
+          }
       )
       enabled);
 
-    virtualisation.oci-containers.backend = "podman";
-    virtualisation.oci-containers.containers = mkMerge (mapAttrsToList
-      (_: cfg: let
-        commonAttrs = {
-          autoStart = false;
-          networks = ["ns:/run/netns/${cfg.vpnNamespace}"];
-          volumes = [
-            "/etc/netns/${cfg.vpnNamespace}/resolv.conf:/etc/resolv.conf:ro"
-          ];
+    myOpt.camofox-compose = mkMerge (mapAttrsToList (name: cfg: {
+        ${name} = {
+          enable = true;
+          inherit (cfg.camofox) image port;
+          inherit (cfg) sopsFile secretsDirName cgroup-parent networkNamespace;
         };
-      in {
-        ${cfg.camofox.serviceName} =
-          commonAttrs
-          // {
-            inherit (cfg.camofox) serviceName image;
-            environment = {
-              CAMOFOX_BIND_HOST = "::1";
-              CAMOFOX_PORT = "11982";
-            };
-            environmentFiles = [outerCfg.sops.secrets.${cfg.camofox.envFile-key}.path];
-            extraOptions = [
-              "--shm-size=2g" # Firefox needs real shared memory; the default 64MB is not enough
-            ];
-          };
-        # ${cfg.firecrawl.serviceName} =
-        #   commonAttrs
-        #   // {
-        #     inherit (cfg.firecrawl) serviceName image;
-        #     environment = {
-        #       PORT = toString cfg.firecrawl.port;
-        #       HOST = "0.0.0.0";
-        #     };
-        #     environmentFiles = [outerCfg.sops.secrets.${cfg.firecrawl.envFile-key}.path];
-        #     # NOTE: the full self-hosted Firecrawl stack is a compose file
-        #     # (API + workers + Playwright + Redis + RabbitMQ + PostgreSQL);
-        #     # this runs only the API image.
-        #   };
       })
       enabled);
 
-    # systemd.services.fastcrw = {
-    #   wantedBy = [ "multi-user.target" ];
+    myOpt.litellm = mkMerge (mapAttrsToList (name: cfg: {
+        ${name} = {
+          enable = true;
+          inherit (cfg.litellm) stateDir port settings;
+          inherit
+            (cfg)
+            socketDir
+            sopsFile
+            secretsDirName
+            cgroup-parent
+            networkNamespace
+            ;
+        };
+      })
+      enabled);
 
-    #   environment = {
-    #     CRW_SERVER__HOST = "::1";
-    #     CRW_SERVER__PORT = "21023";
-    #   };
+    myOpt.fastcrw = mkMerge (mapAttrsToList (name: cfg: {
+        ${name} = {
+          inherit (cfg.fastcrw) enable image port;
+          inherit (cfg) sopsFile secretsDirName cgroup-parent networkNamespace;
+          camofox = {
+            enable = true;
+            url = outerCfg.myOpt.camofox-compose.${name}.url;
+            includeInAuto = true;
+          };
+          searxng = {
+            inherit (cfg.fastcrw.searxng) enable port;
+          };
+        };
+      })
+      enabled);
 
-    #   serviceConfig = {
-    #     DynamicUser = true;
-    #     EnvironmentFile = "/run/secrets/fastcrw.env";
-    #     ExecStart = "${pkgs.fastcrw}/bin/crw-server";
-    #   };
-    # };
-    # # Bearer token(s) required from clients calling http://[::1]:21023
-    # CRW_AUTH__API_KEYS=["crw_live_9f8e7d6c5b4a3210","crw_live_b4ckup0123456789"]
+    myOpt.qdrant = mkMerge (mapAttrsToList (name: cfg: {
+        ${name} = {
+          inherit (cfg.qdrant) enable image stateDir httpPort grpcPort;
+          inherit (cfg) sopsFile secretsDirName cgroup-parent networkNamespace;
+        };
+      })
+      enabled);
 
-    # # Upstream LLM API key for /v1/extract or formats=["json","summary"]
-    # CRW_EXTRACTION__LLM__API_KEY=sk-proj-exampleOpenAiOrAnthropicKey123456
+    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: let
+        camofoxCfg = outerCfg.myOpt.camofox-compose.${name};
+        litellmCfg = outerCfg.myOpt.litellm.${name};
+        fastcrwCfg = outerCfg.myOpt.fastcrw.${name};
+        qdrantCfg = outerCfg.myOpt.qdrant.${name};
+      in {
+        ${cfg.serviceName} = mkMerge [
+          cfg.sleep-on-idle
+          {
+            dependsOn =
+              [
+                camofoxCfg.serviceName
+                litellmCfg.serviceName
+              ]
+              ++ optionals cfg.fastcrw.enable (
+                [fastcrwCfg.serviceName]
+                ++ optional cfg.fastcrw.searxng.enable fastcrwCfg.searxng.serviceName
+              )
+              ++ optional cfg.qdrant.enable qdrantCfg.serviceName;
+            health-check.path = "/";
+            endpoints = {
+              default = {
+                origin.ip-socket = cfg.hermes-agent.unix-socket;
+                proxy = {inherit (cfg.hermes-agent) host port;};
+              };
+              litellm = {
+                origin.ip-socket = litellmCfg.unix-socket;
+                proxy = {inherit (litellmCfg) host port;};
+              };
+            };
+          }
+        ];
+      })
+      enabled);
 
-    # # Authenticated upstream HTTP/SOCKS5 proxy (single or rotation list)
-    # CRW_CRAWLER__PROXY=http://scraper_user:s3cr3tP4ss@proxy.example.com:8080
-    # CRW_CRAWLER__PROXY_LIST=["http://user1:pass1@proxy1.example.com:8080","socks5://user2:pass2@proxy2.example.com:1080"]
-
-    containers = mkMerge (mapAttrsToList (
-        _: cfg: {
-          ${cfg.containerName} = {
-            ephemeral = true;
-            privateNetwork = false;
-            networkNamespace = "/run/netns/${cfg.vpnNamespace}";
-            autoStart = false;
-            bindMounts = {
+    containers = mkMerge (mapAttrsToList (name: cfg: let
+        camofoxCfg = outerCfg.myOpt.camofox-compose.${name};
+        fastcrwCfg = outerCfg.myOpt.fastcrw.${name};
+        qdrantCfg = outerCfg.myOpt.qdrant.${name};
+        netnsCfg =
+          if cfg.networkNamespace != null
+          then outerCfg.myOpt.netns.${cfg.networkNamespace} or null
+          else null;
+        nsPath =
+          if netnsCfg != null
+          then netnsCfg.path
+          else "/run/netns/${cfg.networkNamespace}";
+        nsResolvConf =
+          if netnsCfg != null
+          then netnsCfg.resolvConf
+          else "/etc/netns/${cfg.networkNamespace}/resolv.conf";
+      in {
+        ${cfg.containerName} = {
+          ephemeral = true;
+          privateNetwork = false;
+          networkNamespace =
+            if cfg.networkNamespace != null
+            then nsPath
+            else null;
+          autoStart = false;
+          bindMounts =
+            {
               ${cfg.hermes-agent.stateDir} = {
                 hostPath = cfg.hermes-agent.stateDir;
-                isReadOnly = false;
-              };
-              ${cfg.litellm.stateDir} = {
-                hostPath = cfg.litellm.stateDir;
                 isReadOnly = false;
               };
               ${cfg.secretsDir} = {
@@ -316,118 +409,113 @@ in {
                 hostPath = cfg.socketDir;
                 isReadOnly = false;
               };
+            }
+            // optionalAttrs (cfg.networkNamespace != null) {
               "/etc/resolv.conf" = {
-                hostPath = "/etc/netns/${cfg.vpnNamespace}/resolv.conf";
+                hostPath = nsResolvConf;
                 isReadOnly = true;
               };
             };
-            config = {config, ...}: {
-              imports = [
-                inputs.hermes-agent.nixosModules.default
-                ../../myLib
-                ../systemd-socket-proxyd.nix
-              ];
-              myOpt.systemd-socket-proxyd = {
-                hermes-agent = {
-                  origin = {inherit (cfg.hermes-agent) host port;};
-                  proxy.ip-socket = cfg.hermes-agent.unix-socket;
-                };
-                litellm = {
-                  origin = {inherit (cfg.litellm) host port;};
-                  proxy.ip-socket = cfg.litellm.unix-socket;
-                };
-              };
-              services.litellm = {
-                inherit (cfg.litellm) stateDir host port;
-                enable = true;
-                environmentFile = outerCfg.sops.secrets.${cfg.litellm.envFile-key}.path;
-              };
-              services.hermes-agent = {
-                inherit (cfg.hermes-agent) stateDir settings;
-                enable = true;
-                backend = {
-                  inherit (cfg.hermes-agent) host port;
-                  mode = "serve";
-                };
-                environment = {
-                  CAMOFOX_URL = let
-                    inherit (outerCfg.virtualisation.oci-containers.containers.${cfg.camofox.serviceName}.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
-                  in "http://[${CAMOFOX_BIND_HOST}]:${CAMOFOX_PORT}";
-                };
-                environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
+          config = {...}: {
+            imports = [
+              inputs.hermes-agent.nixosModules.default
+              ../../myLib
+              ../systemd-socket-proxyd.nix
+            ];
+            users.groups.${cfg.hermes-agent.group}.gid = cfg.hermes-agent.gid;
+            users.users.${cfg.hermes-agent.user}.uid = cfg.hermes-agent.uid;
+
+            myOpt.systemd-socket-proxyd = {
+              hermes-agent = {
+                origin = {inherit (cfg.hermes-agent) host port;};
+                proxy.ip-socket = cfg.hermes-agent.unix-socket;
               };
             };
+            services.hermes-agent = {
+              inherit (cfg.hermes-agent) user group stateDir settings;
+              enable = true;
+              # Ensures config.yaml mode is 0660 so host group members can also write config
+              addToSystemPackages = true;
+              backend = {
+                inherit (cfg.hermes-agent) host port;
+                mode = "serve";
+              };
+              mcpServers = optionalAttrs cfg.qdrant.enable {
+                qdrant = {
+                  command = "uvx";
+                  args = ["mcp-server-qdrant"];
+                  env = {
+                    QDRANT_URL = qdrantCfg.httpUrl;
+                    COLLECTION_NAME = cfg.qdrant.collectionName;
+                    FASTEMBED_CACHE_PATH = "${cfg.hermes-agent.stateDir}/fastembed-cache";
+                  };
+                };
+              };
+              environment =
+                {
+                  CAMOFOX_URL = camofoxCfg.url;
+                }
+                // optionalAttrs cfg.fastcrw.enable {
+                  FIRECRAWL_API_URL = fastcrwCfg.url;
+                };
+              environmentFiles = [outerCfg.sops.secrets.${cfg.hermes-agent.envFile-key}.path];
+            };
           };
-        }
+        };
+      })
+      enabled);
+
+    systemd.slices = mkMerge (mapAttrsToList (
+        _: cfg:
+          optionalAttrs (cfg.cgroup-parent != null) {
+            ${toSliceName cfg.cgroup-parent} = {};
+          }
       )
       enabled);
 
-    vpnNamespaces = mkMerge (mapAttrsToList (
-        _: cfg: {
-          ${cfg.vpnNamespace} = {
-            enable = true;
-            wireguardConfigFile = outerCfg.sops.secrets.${cfg.wireguardConfigFile-key}.path;
-          };
-        }
-      )
-      enabled);
-
-    networking.enableIPv6 = true;
-    systemd.services = mkMerge (mapAttrsToList
-      (_: cfg: {
-        ${cfg.serviceName} = {
-          bindsTo = ["${cfg.vpnNamespace}.service"];
-          after = ["${cfg.vpnNamespace}.service"];
-          wants = [
-            "${cfg.camofox.serviceName}.service"
-            # "${cfg.firecrawl.serviceName}.service"
-          ];
-        };
-        ${cfg.camofox.serviceName} = {
-          bindsTo = ["${cfg.vpnNamespace}.service"];
-          after = ["${cfg.vpnNamespace}.service"];
-        };
-        # ${cfg.firecrawl.serviceName} = {
-        #   bindsTo = ["${cfg.vpnNamespace}.service"];
-        #   after = ["${cfg.vpnNamespace}.service"];
-        # };
-        "drop-ipv4-in-${cfg.vpnNamespace}-ns" = {
-          vpnConfinement = {
-            enable = true;
-            inherit (cfg) vpnNamespace;
-          };
-          wantedBy = ["${cfg.vpnNamespace}.service"];
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-          script = ''
-            ${pkgs.nftables}/bin/nft -f ${pkgs.writeText "drop-ipv4.nft" ''
-              table ip filter {
-                chain output {
-                  type filter hook output priority 0;
-                  policy drop;
-                }
-                chain input {
-                  type filter hook input priority 0;
-                  policy drop;
-                }
-                chain forward {
-                  type filter hook forward priority 0;
-                  policy drop;
-                }
-              }
-            ''}
-          '';
-        };
+    systemd.services = mkMerge (mapAttrsToList (name: cfg: let
+        camofoxCfg = outerCfg.myOpt.camofox-compose.${name};
+        litellmCfg = outerCfg.myOpt.litellm.${name};
+        fastcrwCfg = outerCfg.myOpt.fastcrw.${name};
+        qdrantCfg = outerCfg.myOpt.qdrant.${name};
+        sliceUnit = toSliceUnit cfg.cgroup-parent;
+        netnsCfg =
+          if cfg.networkNamespace != null
+          then outerCfg.myOpt.netns.${cfg.networkNamespace} or null
+          else null;
+        nsUnit =
+          if netnsCfg != null
+          then netnsCfg.unit
+          else "${cfg.networkNamespace}.service";
+      in {
+        ${cfg.serviceName} = mkMerge [
+          {
+            wants =
+              [
+                "${camofoxCfg.serviceName}.service"
+                "${litellmCfg.serviceName}.service"
+              ]
+              ++ optionals cfg.fastcrw.enable (
+                ["${fastcrwCfg.serviceName}.service"]
+                ++ optional cfg.fastcrw.searxng.enable "${fastcrwCfg.searxng.serviceName}.service"
+              )
+              ++ optional cfg.qdrant.enable "${qdrantCfg.serviceName}.service";
+          }
+          (mkIf (cfg.networkNamespace != null) {
+            bindsTo = [nsUnit];
+            after = [nsUnit];
+          })
+          (mkIf (sliceUnit != null) {
+            serviceConfig.Slice = mkForce sliceUnit;
+          })
+        ];
       })
       enabled);
 
     systemd.tmpfiles.rules = flatten (
       mapAttrsToList (_: cfg: [
-        "d '${cfg.hermes-agent.stateDir}' - - - - -"
-        "d '${cfg.socketDir}' - - - - -"
-        "d '${cfg.litellm.stateDir}' - - - - -"
+        "d '${cfg.hermes-agent.stateDir}' 2770 ${cfg.hermes-agent.user} ${cfg.hermes-agent.group} - -"
+        "d '${cfg.socketDir}' 2770 ${cfg.hermes-agent.user} ${cfg.hermes-agent.group} - -"
       ])
       enabled
     );
