@@ -1,11 +1,22 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.qdrant;
+  settingsFormat = pkgs.formats.yaml {};
+  secretKey = name: "${name}/qdrant-envFile";
+  mkHttpUrl = host: port: let
+    bracketedHost =
+      if hasPrefix "[" host
+      then host
+      else if hasInfix ":" host
+      then "[${host}]"
+      else host;
+  in "http://${bracketedHost}:${toString port}";
   toSliceUnit = p:
     if p == null
     then null
@@ -35,14 +46,23 @@ in {
           type = types.bool;
           default = true;
         };
+        autoStart = mkOption {
+          type = types.bool;
+          default = false;
+        };
+        package = mkPackageOption pkgs "qdrant" {};
+        webUIPackage = mkPackageOption pkgs "qdrant-web-ui" {};
         serviceName = mkOption {
           type = types.singleLineStr;
           default = "${name}-qdrant";
         };
-        image = mkOption {
+        user = mkOption {
           type = types.singleLineStr;
-          default = "docker.io/qdrant/qdrant:latest";
-          example = "docker.io/qdrant/qdrant:v1.17.0";
+          default = "qdrant-${name}";
+        };
+        group = mkOption {
+          type = types.singleLineStr;
+          default = "qdrant-${name}";
         };
         stateDir = mkOption {
           type = types.singleLineStr;
@@ -53,34 +73,33 @@ in {
         };
         httpPort = mkOption {
           type = types.port;
-          default = 6333;
         };
         grpcPort = mkOption {
           type = types.port;
-          default = 6334;
         };
         httpUrl = mkOption {
           type = types.singleLineStr;
-          default = "http://[${cfg.host}]:${toString cfg.httpPort}";
-          readOnly = true;
+          default = mkHttpUrl cfg.host cfg.httpPort;
         };
         grpcUrl = mkOption {
           type = types.singleLineStr;
-          default = "http://[${cfg.host}]:${toString cfg.grpcPort}";
-          readOnly = true;
+          default = mkHttpUrl cfg.host cfg.grpcPort;
+        };
+        telemetry = mkOption {
+          type = types.bool;
+          default = true;
+        };
+        settings = mkOption {
+          type = settingsFormat.type;
+          default = {};
+        };
+        environment = mkOption {
+          type = types.attrsOf types.str;
+          default = {};
         };
         sopsFile = mkOption {
           type = types.nullOr types.anything;
           default = null;
-        };
-        secretsDirName = mkOption {
-          type = types.singleLineStr;
-          default = name;
-        };
-        envFile-key = mkOption {
-          type = types.singleLineStr;
-          default = "${cfg.secretsDirName}/qdrant-envFile";
-          readOnly = true;
         };
         cgroup-parent = mkOption {
           type = types.nullOr types.singleLineStr;
@@ -95,63 +114,122 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (
-        _: cfg:
-          optionalAttrs (cfg.sopsFile != null) {
-            ${cfg.envFile-key} = {inherit (cfg) sopsFile;};
-          }
-      )
+    users.groups = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.group} = {};
+      })
       enabled);
 
-    virtualisation.oci-containers.backend = "podman";
-    virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (_: cfg: let
-        sliceUnit = toSliceUnit cfg.cgroup-parent;
-        ns =
-          if cfg.networkNamespace != null
-          then resolveNetns cfg.networkNamespace
-          else null;
-      in {
-        ${cfg.serviceName} = {
-          inherit (cfg) serviceName image;
-          autoStart = false;
-          networks = optional (ns != null) "ns:${ns.path}";
-          volumes =
-            [
-              "${cfg.stateDir}:/qdrant/storage"
-            ]
-            ++ optional (ns != null) "${ns.resolvConf}:/etc/resolv.conf:ro";
-          environment = {
-            QDRANT__SERVICE__HOST = cfg.host;
-            QDRANT__SERVICE__HTTP_PORT = toString cfg.httpPort;
-            QDRANT__SERVICE__GRPC_PORT = toString cfg.grpcPort;
-            QDRANT__TELEMETRY_DISABLED = "true";
-          };
-          environmentFiles =
-            optional (cfg.sopsFile != null) outerCfg.sops.secrets.${cfg.envFile-key}.path;
-          extraOptions = optional (sliceUnit != null) "--cgroup-parent=${sliceUnit}";
+    users.users = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.user} = {
+          isSystemUser = true;
+          inherit (cfg) group;
+          home = cfg.stateDir;
         };
       })
       enabled);
 
-    systemd.services = mkMerge (mapAttrsToList (_: cfg: let
+    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
+        ${secretKey name} = optionalAttrs (cfg.sopsFile != null) {
+          inherit (cfg) sopsFile;
+        };
+      })
+      enabled);
+
+    systemd.services = mkMerge (mapAttrsToList (name: cfg: let
         sliceUnit = toSliceUnit cfg.cgroup-parent;
         ns =
           if cfg.networkNamespace != null
           then resolveNetns cfg.networkNamespace
           else null;
+        configFile = settingsFormat.generate "${cfg.serviceName}-config.yaml" (recursiveUpdate
+          {
+            storage = {
+              storage_path = "${cfg.stateDir}/storage";
+              snapshots_path = "${cfg.stateDir}/snapshots";
+              on_disk_payload = true;
+            };
+            service = {
+              host = cfg.host;
+              http_port = cfg.httpPort;
+              grpc_port = cfg.grpcPort;
+              static_content_dir = cfg.webUIPackage;
+              enable_cors = true;
+            };
+            cluster.enabled = false;
+            telemetry_disabled = !cfg.telemetry;
+          }
+          cfg.settings);
       in {
         ${cfg.serviceName} = mkMerge [
+          {
+            description = "Qdrant vector search engine (${name})";
+            wantedBy = optional cfg.autoStart "multi-user.target";
+            inherit (cfg) environment;
+            serviceConfig =
+              {
+                User = cfg.user;
+                Group = cfg.group;
+                WorkingDirectory = cfg.stateDir;
+                LimitNOFILE = 65536;
+                ExecStart = "${cfg.package}/bin/qdrant --config-path ${configFile}";
+                EnvironmentFile = outerCfg.sops.secrets.${secretKey name}.path;
+                Restart = "on-failure";
+                ReadWritePaths = [cfg.stateDir];
+                NoNewPrivileges = true;
+                PrivateTmp = true;
+                PrivateDevices = true;
+                PrivateIPC = true;
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                ProtectClock = true;
+                ProtectControlGroups = true;
+                ProtectHostname = true;
+                ProtectKernelLogs = true;
+                ProtectKernelModules = true;
+                ProtectKernelTunables = true;
+                ProtectProc = "invisible";
+                DevicePolicy = "closed";
+                CapabilityBoundingSet = "";
+                AmbientCapabilities = "";
+                LockPersonality = true;
+                MemoryDenyWriteExecute = true;
+                RemoveIPC = true;
+                RestrictAddressFamilies = [
+                  "AF_INET"
+                  "AF_INET6"
+                  "AF_UNIX"
+                ];
+                RestrictNamespaces = true;
+                RestrictRealtime = true;
+                RestrictSUIDSGID = true;
+                SystemCallArchitectures = "native";
+                SystemCallFilter = [
+                  "@system-service"
+                  "~@privileged"
+                  "~@resources"
+                ];
+                UMask = "0077";
+              }
+              // optionalAttrs (ns != null) {
+                NetworkNamespacePath = ns.path;
+                BindReadOnlyPaths = ["${ns.resolvConf}:/etc/resolv.conf"];
+              }
+              // optionalAttrs (sliceUnit != null) {
+                Slice = sliceUnit;
+              };
+          }
           (mkIf (ns != null) {
             bindsTo = [ns.unit];
             after = [ns.unit];
-          })
-          (mkIf (sliceUnit != null) {
-            serviceConfig.Slice = sliceUnit;
           })
         ];
       })
       enabled);
 
-    systemd.tmpfiles.rules = mapAttrsToList (_: cfg: "d '${cfg.stateDir}' - - - - -") enabled;
+    systemd.tmpfiles.rules =
+      mapAttrsToList (
+        _: cfg: "d '${cfg.stateDir}' 0750 ${cfg.user} ${cfg.group} - -"
+      )
+      enabled;
   };
 }

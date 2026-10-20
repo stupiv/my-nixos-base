@@ -11,6 +11,7 @@ with lib; let
   wgEnabled = filterAttrs (_: cfg: cfg.wireguard.enable) enabled;
   plainEnabled = filterAttrs (_: cfg: !cfg.wireguard.enable) enabled;
   ipv6OnlyEnabled = filterAttrs (_: cfg: cfg.ipv6-only) enabled;
+  wgSecretKey = name: "${name}/wireguardConfigFile";
 in {
   options.myOpt.netns = mkOption {
     default = {};
@@ -36,6 +37,11 @@ in {
             else "v${builtins.substring 0 6 hash}";
           readOnly = true;
         };
+        dnsContainerName = mkOption {
+          type = types.singleLineStr;
+          default = "${cfg.namespace}-dns";
+          readOnly = true;
+        };
         serviceName = mkOption {
           type = types.singleLineStr;
           default = cfg.namespace;
@@ -43,7 +49,7 @@ in {
         };
         unit = mkOption {
           type = types.singleLineStr;
-          default = "${cfg.serviceName}.service";
+          default = "container@${cfg.dnsContainerName}.service";
           readOnly = true;
         };
         path = mkOption {
@@ -60,14 +66,9 @@ in {
           type = types.bool;
           default = false;
         };
-        dns = mkOption {
-          type = types.listOf types.singleLineStr;
-          default =
-            [
-              "2606:4700:4700::1111"
-              "2606:4700:4700::1001"
-            ]
-            ++ optional (!cfg.ipv6-only) "1.1.1.1";
+        sopsFile = mkOption {
+          type = types.nullOr types.anything;
+          default = null;
         };
         bridgeAddress = mkOption {
           type = types.singleLineStr;
@@ -89,26 +90,6 @@ in {
           enable = mkOption {
             type = types.bool;
             default = false;
-          };
-          sopsFile = mkOption {
-            type = types.nullOr types.anything;
-            default = null;
-          };
-          secretsDirName = mkOption {
-            type = types.singleLineStr;
-            default = name;
-          };
-          configFile-key = mkOption {
-            type = types.singleLineStr;
-            default = "${cfg.wireguard.secretsDirName}/wireguardConfigFile";
-            readOnly = true;
-          };
-          configFile = mkOption {
-            type = types.nullOr types.path;
-            default =
-              if cfg.wireguard.sopsFile != null
-              then outerCfg.sops.secrets.${cfg.wireguard.configFile-key}.path
-              else null;
           };
           accessibleFrom = mkOption {
             type = types.listOf types.singleLineStr;
@@ -136,29 +117,21 @@ in {
   ];
 
   config = mkIf (enabled != {}) {
-    assertions =
-      mapAttrsToList (name: cfg: {
-        assertion = cfg.wireguard.enable -> cfg.wireguard.configFile != null;
-        message = "myOpt.netns.${name}: wireguard.configFile (or wireguard.sopsFile) must be set when wireguard.enable = true.";
-      })
-      wgEnabled;
-
     networking.enableIPv6 = true;
     boot.kernel.sysctl."net.ipv4.ip_forward" = mkDefault 1;
     boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = mkDefault 1;
 
-    sops.secrets = mkMerge (mapAttrsToList (
-        _: cfg:
-          optionalAttrs (cfg.wireguard.sopsFile != null) {
-            ${cfg.wireguard.configFile-key} = {inherit (cfg.wireguard) sopsFile;};
-          }
-      )
+    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
+        ${wgSecretKey name} = optionalAttrs (cfg.sopsFile != null) {
+          inherit (cfg) sopsFile;
+        };
+      })
       wgEnabled);
 
-    vpnNamespaces = mkMerge (mapAttrsToList (_: cfg: {
+    vpnNamespaces = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.namespace} = {
           enable = true;
-          wireguardConfigFile = cfg.wireguard.configFile;
+          wireguardConfigFile = outerCfg.sops.secrets.${wgSecretKey name}.path;
           inherit
             (cfg)
             bridgeAddress
@@ -176,6 +149,65 @@ in {
         };
       })
       wgEnabled);
+
+    containers = mkMerge (mapAttrsToList (_: cfg: let
+        nsName = cfg.namespace;
+      in {
+        ${cfg.dnsContainerName} = {
+          ephemeral = true;
+          privateNetwork = false;
+          networkNamespace = cfg.path;
+          autoStart = false;
+          extraFlags = ["--resolv-conf=off"];
+          bindMounts."/etc/netns/${nsName}" = {
+            hostPath = "/etc/netns/${nsName}";
+            isReadOnly = false;
+          };
+          config = {...}: {
+            imports = [
+              ../dnscrypt
+              ./ipv6.nix
+            ];
+            networking.useHostResolvConf = mkOverride 90 false;
+            systemd.services.export-netns-resolv-conf = {
+              description = "Export in-container dnscrypt resolv.conf to /etc/netns/${nsName}/resolv.conf";
+              wantedBy = ["multi-user.target"];
+              after = [
+                "etc.service"
+                "resolvconf.service"
+                "network-local-commands.service"
+                "network.target"
+                "dnscrypt-proxy.service"
+                "nss-lookup.target"
+              ];
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+                NoNewPrivileges = true;
+                PrivateTmp = true;
+                ProtectHome = true;
+                ProtectClock = true;
+                ProtectKernelLogs = true;
+                ProtectKernelModules = true;
+                ProtectKernelTunables = true;
+                ProtectControlGroups = true;
+                LockPersonality = true;
+                RestrictRealtime = true;
+                RestrictSUIDSGID = true;
+                UMask = "0022";
+              };
+              script = ''
+                cat /etc/resolv.conf > /etc/netns/${nsName}/resolv.conf
+              '';
+            };
+            systemd.paths.export-netns-resolv-conf = {
+              wantedBy = ["multi-user.target"];
+              pathConfig.PathChanged = ["/etc/resolv.conf"];
+            };
+          };
+        };
+      })
+      enabled);
 
     systemd.services = mkMerge [
       (mkMerge (mapAttrsToList (_: cfg: let
@@ -199,7 +231,6 @@ in {
             description = "Isolated network namespace ${cfg.namespace}";
             after = ["network-online.target"];
             wants = ["network-online.target"];
-            wantedBy = ["multi-user.target"];
             path = [
               pkgs.iproute2
               pkgs.nftables
@@ -208,6 +239,25 @@ in {
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
+              NoNewPrivileges = true;
+              PrivateTmp = true;
+              ProtectHome = true;
+              ProtectClock = true;
+              ProtectHostname = true;
+              ProtectKernelLogs = true;
+              ProtectKernelModules = true;
+              ProtectControlGroups = true;
+              LockPersonality = true;
+              RestrictRealtime = true;
+              RestrictSUIDSGID = true;
+              CapabilityBoundingSet = [
+                "CAP_NET_ADMIN"
+                "CAP_SYS_ADMIN"
+              ];
+              AmbientCapabilities = [
+                "CAP_NET_ADMIN"
+                "CAP_SYS_ADMIN"
+              ];
             };
             script = ''
               ip netns add ${cfg.namespace}
@@ -215,7 +265,6 @@ in {
 
               rm -rf /etc/netns/${cfg.namespace}
               mkdir -p /etc/netns/${cfg.namespace}
-              printf 'nameserver %s\n' ${escapeShellArgs cfg.dns} > ${cfg.resolvConf}
 
               ip link add ${cfg.namespace}-br type bridge
               ${optionalString (!cfg.ipv6-only) "ip addr add ${cfg.bridgeAddress}/24 dev ${cfg.namespace}-br"}
@@ -247,16 +296,56 @@ in {
         })
         plainEnabled))
 
+      (mkMerge (mapAttrsToList (_: cfg: let
+          baseUnit = "${cfg.serviceName}.service";
+          dropUnit = "drop-ipv4-in-${cfg.namespace}-ns.service";
+        in {
+          "container@${cfg.dnsContainerName}" = {
+            bindsTo = [baseUnit];
+            after =
+              [baseUnit]
+              ++ optional cfg.ipv6-only dropUnit;
+            wantedBy = [baseUnit];
+            preStart = mkBefore ''
+              mkdir -p /etc/netns/${cfg.namespace}
+              ${optionalString cfg.wireguard.enable ''
+                ${pkgs.iproute2}/bin/ip netns exec ${cfg.namespace} ${pkgs.iptables}/bin/iptables -C dns-fw -o lo -j ACCEPT 2>/dev/null \
+                  || ${pkgs.iproute2}/bin/ip netns exec ${cfg.namespace} ${pkgs.iptables}/bin/iptables -I dns-fw -o lo -j ACCEPT
+                ${pkgs.iproute2}/bin/ip netns exec ${cfg.namespace} ${pkgs.iptables}/bin/ip6tables -C dns-fw -o lo -j ACCEPT 2>/dev/null \
+                  || ${pkgs.iproute2}/bin/ip netns exec ${cfg.namespace} ${pkgs.iptables}/bin/ip6tables -I dns-fw -o lo -j ACCEPT
+              ''}
+            '';
+          };
+        })
+        enabled))
+
       (mkMerge (mapAttrsToList (_: cfg: {
           "drop-ipv4-in-${cfg.namespace}-ns" = {
             description = "Drop all IPv4 traffic inside network namespace ${cfg.namespace}";
-            bindsTo = [cfg.unit];
-            after = [cfg.unit];
-            wantedBy = [cfg.unit];
+            bindsTo = ["${cfg.serviceName}.service"];
+            after = ["${cfg.serviceName}.service"];
+            wantedBy = ["${cfg.serviceName}.service"];
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
               NetworkNamespacePath = cfg.path;
+              NoNewPrivileges = true;
+              PrivateTmp = true;
+              PrivateDevices = true;
+              ProtectSystem = "strict";
+              ProtectHome = true;
+              ProtectClock = true;
+              ProtectHostname = true;
+              ProtectKernelLogs = true;
+              ProtectKernelModules = true;
+              ProtectKernelTunables = true;
+              ProtectControlGroups = true;
+              LockPersonality = true;
+              RestrictRealtime = true;
+              RestrictSUIDSGID = true;
+              RestrictAddressFamilies = ["AF_NETLINK"];
+              CapabilityBoundingSet = ["CAP_NET_ADMIN"];
+              AmbientCapabilities = ["CAP_NET_ADMIN"];
             };
             script = ''
               ${pkgs.nftables}/bin/nft -f ${pkgs.writeText "drop-ipv4.nft" ''

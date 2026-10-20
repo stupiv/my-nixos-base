@@ -6,6 +6,15 @@
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.camofox-compose;
+  secretKey = name: "${name}/camofox-envFile";
+  mkHttpUrl = host: port: let
+    bracketedHost =
+      if hasPrefix "[" host
+      then host
+      else if hasInfix ":" host
+      then "[${host}]"
+      else host;
+  in "http://${bracketedHost}:${toString port}";
   toSliceUnit = p:
     if p == null
     then null
@@ -49,25 +58,18 @@ in {
         };
         port = mkOption {
           type = types.port;
-          default = 11982;
         };
         url = mkOption {
           type = types.singleLineStr;
-          default = "http://[${cfg.host}]:${toString cfg.port}";
-          readOnly = true;
+          default = mkHttpUrl cfg.host cfg.port;
+        };
+        telemetry = mkOption {
+          type = types.bool;
+          default = true;
         };
         sopsFile = mkOption {
           type = types.nullOr types.anything;
           default = null;
-        };
-        secretsDirName = mkOption {
-          type = types.singleLineStr;
-          default = name;
-        };
-        envFile-key = mkOption {
-          type = types.singleLineStr;
-          default = "${cfg.secretsDirName}/camofox-envFile";
-          readOnly = true;
         };
         cgroup-parent = mkOption {
           type = types.nullOr types.singleLineStr;
@@ -77,7 +79,7 @@ in {
           type = types.nullOr types.singleLineStr;
           default = null;
         };
-        extraEnvironment = mkOption {
+        environment = mkOption {
           type = types.attrsOf types.str;
           default = {};
         };
@@ -86,16 +88,15 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (
-        _: cfg:
-          optionalAttrs (cfg.sopsFile != null) {
-            ${cfg.envFile-key} = {inherit (cfg) sopsFile;};
-          }
-      )
+    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
+        ${secretKey name} = optionalAttrs (cfg.sopsFile != null) {
+          inherit (cfg) sopsFile;
+        };
+      })
       enabled);
 
     virtualisation.oci-containers.backend = "podman";
-    virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (_: cfg: let
+    virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (name: cfg: let
         sliceUnit = toSliceUnit cfg.cgroup-parent;
         ns =
           if cfg.networkNamespace != null
@@ -111,14 +112,20 @@ in {
             {
               CAMOFOX_BIND_HOST = cfg.host;
               CAMOFOX_PORT = toString cfg.port;
-              CAMOFOX_CRASH_REPORT_ENABLED = "false";
+              CAMOFOX_CRASH_REPORT_ENABLED = boolToString cfg.telemetry;
             }
-            // cfg.extraEnvironment;
-          environmentFiles =
-            optional (cfg.sopsFile != null) outerCfg.sops.secrets.${cfg.envFile-key}.path;
+            // cfg.environment;
+          environmentFiles = [outerCfg.sops.secrets.${secretKey name}.path];
           extraOptions =
             [
               "--shm-size=2g" # Firefox needs real shared memory; the default 64MB is not enough
+              "--read-only"
+              "--tmpfs=/tmp:rw,nosuid,nodev,size=512m"
+              "--tmpfs=/run:rw,noexec,nosuid,nodev,size=32m"
+              "--tmpfs=/root/.camofox:rw,noexec,nosuid,nodev,size=256m"
+              "--cap-drop=ALL"
+              "--security-opt=no-new-privileges"
+              "--pids-limit=512"
             ]
             ++ optional (sliceUnit != null) "--cgroup-parent=${sliceUnit}";
         };
@@ -133,6 +140,19 @@ in {
           else null;
       in {
         ${cfg.serviceName} = mkMerge [
+          {
+            serviceConfig = {
+              ProtectHome = true;
+              ProtectClock = true;
+              ProtectHostname = true;
+              ProtectKernelLogs = true;
+              ProtectKernelModules = true;
+              ProtectKernelTunables = true;
+              LockPersonality = true;
+              RestrictRealtime = true;
+              RestrictSUIDSGID = true;
+            };
+          }
           (mkIf (ns != null) {
             bindsTo = [ns.unit];
             after = [ns.unit];

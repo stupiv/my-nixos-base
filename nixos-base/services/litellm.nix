@@ -6,6 +6,15 @@
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.litellm;
+  secretKey = name: "${name}/litellm-envFile";
+  mkHttpUrl = host: port: let
+    bracketedHost =
+      if hasPrefix "[" host
+      then host
+      else if hasInfix ":" host
+      then "[${host}]"
+      else host;
+  in "http://${bracketedHost}:${toString port}";
   toSliceUnit = p:
     if p == null
     then null
@@ -64,29 +73,23 @@ in {
         };
         url = mkOption {
           type = types.singleLineStr;
-          default = "http://[${cfg.host}]:${toString cfg.port}";
-          readOnly = true;
+          default = mkHttpUrl cfg.host cfg.port;
+        };
+        telemetry = mkOption {
+          type = types.bool;
+          default = true;
         };
         settings = mkOption {
           type = types.anything;
           default = {};
         };
+        environment = mkOption {
+          type = types.attrsOf types.str;
+          default = {};
+        };
         sopsFile = mkOption {
-          type = types.anything;
-        };
-        secretsDirName = mkOption {
-          type = types.singleLineStr;
-          default = name;
-        };
-        envFile-key = mkOption {
-          type = types.singleLineStr;
-          default = "${cfg.secretsDirName}/litellm-envFile";
-          readOnly = true;
-        };
-        secretsDir = mkOption {
-          type = types.singleLineStr;
-          default = builtins.dirOf outerCfg.sops.secrets.${cfg.envFile-key}.path;
-          readOnly = true;
+          type = types.nullOr types.anything;
+          default = null;
         };
         sleep-on-idle = mkOption {
           type = types.nullOr types.anything;
@@ -105,8 +108,10 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.envFile-key} = {inherit (cfg) sopsFile;};
+    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
+        ${secretKey name} = optionalAttrs (cfg.sopsFile != null) {
+          inherit (cfg) sopsFile;
+        };
       })
       enabled);
 
@@ -122,12 +127,17 @@ in {
                   proxy = {inherit (cfg) host port;};
                 };
               }
+              (optionalAttrs (cfg.cgroup-parent != null) {
+                inherit (cfg) cgroup-parent;
+              })
             ];
           }
       )
       enabled);
 
-    containers = mkMerge (mapAttrsToList (_: cfg: let
+    containers = mkMerge (mapAttrsToList (name: cfg: let
+        envPath = outerCfg.sops.secrets.${secretKey name}.path;
+        secretsDir = builtins.dirOf envPath;
         ns =
           if cfg.networkNamespace != null
           then resolveNetns cfg.networkNamespace
@@ -147,8 +157,8 @@ in {
                 hostPath = cfg.stateDir;
                 isReadOnly = false;
               };
-              ${cfg.secretsDir} = {
-                hostPath = cfg.secretsDir;
+              ${secretsDir} = {
+                hostPath = secretsDir;
                 isReadOnly = true;
               };
               ${cfg.socketDir} = {
@@ -174,7 +184,37 @@ in {
             services.litellm = {
               inherit (cfg) stateDir host port settings;
               enable = true;
-              environmentFile = outerCfg.sops.secrets.${cfg.envFile-key}.path;
+              environmentFile = envPath;
+              environment =
+                (
+                  if cfg.telemetry
+                  then {
+                    SCARF_NO_ANALYTICS = "False";
+                    DO_NOT_TRACK = "False";
+                    ANONYMIZED_TELEMETRY = "True";
+                  }
+                  else {
+                    SCARF_NO_ANALYTICS = "True";
+                    DO_NOT_TRACK = "True";
+                    ANONYMIZED_TELEMETRY = "False";
+                  }
+                )
+                // cfg.environment;
+            };
+            systemd.services.litellm.serviceConfig = {
+              NoNewPrivileges = true;
+              PrivateIPC = true;
+              ProtectSystem = "strict";
+              ReadWritePaths = [cfg.stateDir];
+              CapabilityBoundingSet = "";
+              AmbientCapabilities = "";
+              RestrictSUIDSGID = true;
+              RemoveIPC = true;
+              SystemCallFilter = [
+                "@system-service"
+                "~@privileged"
+                "~@resources"
+              ];
             };
           };
         };
@@ -202,8 +242,8 @@ in {
 
     systemd.tmpfiles.rules = flatten (
       mapAttrsToList (_: cfg: [
-        "d '${cfg.stateDir}' - - - - -"
-        "d '${cfg.socketDir}' - - - - -"
+        "d '${cfg.stateDir}' 0750 - - - -"
+        "d '${cfg.socketDir}' 0750 - - - -"
       ])
       enabled
     );

@@ -5,11 +5,17 @@
   ...
 }:
 with lib; let
-  inherit (config.myOpt.dnscrypt) filter;
+  cfg = config.myOpt.dnscrypt;
 in {
-  options.myOpt.dnscrypt.filter = mkOption {
-    type = types.lines;
-    default = '''';
+  options.myOpt.dnscrypt = {
+    ipv6.disable = mkOption {
+      type = types.bool;
+      default = false;
+    };
+    filter = mkOption {
+      type = types.lines;
+      default = '''';
+    };
   };
 
   config = {
@@ -29,13 +35,14 @@ in {
           cache_file = "/var/lib/dnscrypt-proxy/public-resolvers.md";
         };
 
-        block_ipv6 = config.myOpt.ipv6.dns.disable;
+        block_ipv6 = cfg.ipv6.disable;
         ipv6_servers = true;
+        listen_addresses = ["[::]:53"];
 
         require_dnssec = true;
         require_nolog = false;
         require_nofilter = true;
-        blocked_names.blocked_names_file = pkgs.writeText "filter.txt" filter;
+        blocked_names.blocked_names_file = pkgs.writeText "filter.txt" cfg.filter;
       };
     };
   };

@@ -7,10 +7,6 @@ with lib; let
   cfg = config.myOpt.ipv6;
 in {
   options.myOpt.ipv6 = {
-    dns.disable = mkOption {
-      type = types.bool;
-      default = false;
-    };
     public-address = mkOption {
       type = types.nullOr types.str;
     };
