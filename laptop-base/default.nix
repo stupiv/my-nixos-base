@@ -10,6 +10,7 @@
     # ./default.nix
     ./firewall.nix
     ./home-manager.nix
+    ./ipv6.nix
     ./naturalScrolling.nix
     ./nixos_ozone_wl.nix
     ./plasma6.nix

@@ -29,10 +29,12 @@ in {
           cache_file = "/var/lib/dnscrypt-proxy/public-resolvers.md";
         };
 
+        block_ipv6 = config.myOpt.ipv6.dns.disable;
+        ipv6_servers = true;
+
         require_dnssec = true;
         require_nolog = false;
         require_nofilter = true;
-
         blocked_names.blocked_names_file = pkgs.writeText "filter.txt" filter;
       };
     };

@@ -16,8 +16,6 @@ with lib; let
       };
     });
 in {
-  imports = [../myLib];
-
   options.myOpt.systemd-socket-proxyd = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({

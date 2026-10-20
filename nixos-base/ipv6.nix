@@ -7,16 +7,12 @@ with lib; let
   cfg = config.myOpt.ipv6;
 in {
   options.myOpt.ipv6 = {
-    enable = mkOption {
+    dns.disable = mkOption {
       type = types.bool;
+      default = false;
     };
-    public = {
-      enable = mkOption {
-        type = types.bool;
-      };
-      address = mkOption {
-        type = types.str;
-      };
+    public-address = mkOption {
+      type = types.nullOr types.str;
     };
     interface = mkOption {
       type = types.str;
@@ -25,22 +21,16 @@ in {
       type = types.str;
     };
   };
-
-  config = {
-    services.dnscrypt-proxy.settings = {
-      ipv6_servers = cfg.enable; # Use servers reachable over IPv6 -- Do not enable if you don't have IPv6 connectivity
-      block_ipv6 = ! cfg.enable;
-    };
-
-    networking.interfaces = mkIf (cfg.enable && cfg.public.enable) {
+  config = mkIf (cfg.public-address != null) {
+    networking.interfaces = {
       ${cfg.interface}.ipv6.addresses = [
         {
-          address = cfg.public.address;
+          address = cfg.public-address;
           prefixLength = 64;
         }
       ];
     };
-    networking.defaultGateway6 = mkIf (cfg.enable && cfg.public.enable) {
+    networking.defaultGateway6 = {
       address = cfg.gateway;
       interface = cfg.interface;
     };

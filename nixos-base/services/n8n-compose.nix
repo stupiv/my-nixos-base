@@ -1,6 +1,7 @@
-# TODO 2605
-## use services.n8n. ??
-## enviroment variables NODES_EXCLUDE=[] N8N_NODES_INCLUDE N8N_ENABLE_EXECUTE_COMMAND ??
+# - [ ] extraOptions = [ "--cgroup-parent=${sliceName}.slice" ];
+# - [ ] You froze the systemd services not the OCI containers.
+# - [ ] Use services.n8n. instead of OCI containers. (Backup and migration are required here.)
+# - [ ] enviroment variables NODES_EXCLUDE=[] N8N_NODES_INCLUDE N8N_ENABLE_EXECUTE_COMMAND ??
 {
   config,
   lib,

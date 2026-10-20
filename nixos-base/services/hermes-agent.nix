@@ -1,3 +1,14 @@
+# - [ ]
+# - [ ] Creating a network namespace and a parent cgroup is a separate service. ipv6-only is optional. wireguard is optional. sleep-on-idle and heath-check on the module too.
+# - [ ] Modularize
+# - [ ] extraOptions = [ "--cgroup-parent=${sliceName}.slice" ];
+# - [ ] `systemctl status ${cfg.serviceName}.slice` does not look right
+# - [ ] Leverage camofox for fastcrw
+# - [ ] searxng for fastcrw
+# - [ ] fastcrw/crw in place of firecrawl
+# - [ ] Keep fastcrw stateless
+# - [ ] qdrant/qdrant for external memory
+# - [ ] user option. set uid and gid for hermes inside and outside container. Let the the user join the hermes group outside.
 {
   config,
   lib,
@@ -257,6 +268,30 @@ in {
       })
       enabled);
 
+    # systemd.services.fastcrw = {
+    #   wantedBy = [ "multi-user.target" ];
+
+    #   environment = {
+    #     CRW_SERVER__HOST = "::1";
+    #     CRW_SERVER__PORT = "21023";
+    #   };
+
+    #   serviceConfig = {
+    #     DynamicUser = true;
+    #     EnvironmentFile = "/run/secrets/fastcrw.env";
+    #     ExecStart = "${pkgs.fastcrw}/bin/crw-server";
+    #   };
+    # };
+    # # Bearer token(s) required from clients calling http://[::1]:21023
+    # CRW_AUTH__API_KEYS=["crw_live_9f8e7d6c5b4a3210","crw_live_b4ckup0123456789"]
+
+    # # Upstream LLM API key for /v1/extract or formats=["json","summary"]
+    # CRW_EXTRACTION__LLM__API_KEY=sk-proj-exampleOpenAiOrAnthropicKey123456
+
+    # # Authenticated upstream HTTP/SOCKS5 proxy (single or rotation list)
+    # CRW_CRAWLER__PROXY=http://scraper_user:s3cr3tP4ss@proxy.example.com:8080
+    # CRW_CRAWLER__PROXY_LIST=["http://user1:pass1@proxy1.example.com:8080","socks5://user2:pass2@proxy2.example.com:1080"]
+
     containers = mkMerge (mapAttrsToList (
         _: cfg: {
           ${cfg.containerName} = {
@@ -289,6 +324,7 @@ in {
             config = {config, ...}: {
               imports = [
                 inputs.hermes-agent.nixosModules.default
+                ../../myLib
                 ../systemd-socket-proxyd.nix
               ];
               myOpt.systemd-socket-proxyd = {
