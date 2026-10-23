@@ -24,15 +24,6 @@ with lib; let
     then p
     else "${p}.slice";
 in {
-  imports = [
-    ./netns.nix
-    ./camofox.nix
-    ./searxng.nix
-    ./litellm.nix
-    ./fastcrw.nix
-    ./qdrant.nix
-  ];
-
   options.myOpt.hermes-agent-compose = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let

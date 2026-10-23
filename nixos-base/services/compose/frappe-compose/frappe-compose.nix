@@ -1,6 +1,6 @@
 # - [ ] extraOptions = [ "--cgroup-parent=${sliceName}.slice" ];
 # - [ ] You froze the systemd services not the OCI containers.
-# = [ ] systemd/oci hardening
+# - [ ] systemd/oci hardening
 {
   config,
   lib,

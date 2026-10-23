@@ -4,12 +4,10 @@
     ./2511
     ./dnscrypt
     ./services
-    ./sleep-on-idle
     ./terminal
     ./admin.nix
     ./bootloader.nix
     ./caddy.nix
-    ./cloudflared.nix
     # ./default.nix
     ./dirs.nix
     ./firmware.nix
@@ -20,12 +18,9 @@
     ./no-coredump.nix
     ./openssh.nix
     ./podman.nix
-    ./proxy-compose.nix
-    ./rclone-automount.nix
     ./shellcheck.nix
     ./sops.nix
     ./specialisation.nix
-    ./systemd-socket-proxyd.nix
     ./time.nix
     ./tlp.nix
     ./vmVariant.nix

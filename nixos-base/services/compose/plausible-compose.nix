@@ -1,4 +1,4 @@
-# = [ ] systemd/oci hardening
+# - [ ] systemd/oci hardening
 {
   config,
   lib,
