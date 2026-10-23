@@ -8,14 +8,6 @@ with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.hermes-agent-compose;
   secretKey = name: "${name}/hermes-agent-envFile";
-  mkHttpUrl = host: port: let
-    bracketedHost =
-      if hasPrefix "[" host
-      then host
-      else if hasInfix ":" host
-      then "[${host}]"
-      else host;
-  in "http://${bracketedHost}:${toString port}";
   toSliceName = p: removeSuffix ".slice" p;
   toSliceUnit = p:
     if p == null
@@ -115,10 +107,6 @@ in {
             type = types.singleLineStr;
             default = "::1";
             readOnly = true;
-          };
-          url = mkOption {
-            type = types.singleLineStr;
-            default = mkHttpUrl cfg.hermes-agent.host cfg.hermes-agent.port;
           };
           telemetry = mkOption {
             type = types.bool;
