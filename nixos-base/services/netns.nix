@@ -166,7 +166,6 @@ in {
           config = {...}: {
             imports = [
               ../dnscrypt
-              ./ipv6.nix
             ];
             networking.useHostResolvConf = mkOverride 90 false;
             systemd.services.export-netns-resolv-conf = {
