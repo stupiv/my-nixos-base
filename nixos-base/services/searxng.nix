@@ -7,7 +7,7 @@
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.searxng-compose;
-  yamlFormat = pkgs.formats.yaml {};
+  names = attrNames enabled;
   mkHttpUrl = host: port: let
     bracketedHost =
       if hasPrefix "[" host
@@ -37,7 +37,7 @@ with lib; let
 in {
   options.myOpt.searxng-compose = mkOption {
     default = {};
-    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
+    type = types.attrsOf (types.submodule ({...} @ innerArgs: let
       cfg = innerArgs.config;
     in {
       options = {
@@ -45,14 +45,15 @@ in {
           type = types.bool;
           default = true;
         };
+        # services.searx is a singleton module, so the unit name is fixed and
+        # the option is kept read-only for consumers (proxy-compose,
+        # sleep-on-idle, hermes-agent-compose) that key off a service name.
         serviceName = mkOption {
           type = types.singleLineStr;
-          default = "${name}-searxng";
+          default = "searx";
+          readOnly = true;
         };
-        image = mkOption {
-          type = types.singleLineStr;
-          example = "docker.io/searxng/searxng:2026.5.9-0cba32c15";
-        };
+        package = mkPackageOption pkgs "searxng" {};
         host = mkOption {
           type = types.singleLineStr;
           default = "::1";
@@ -89,115 +90,94 @@ in {
     }));
   };
 
-  config = mkIf (enabled != {}) {
+  config = mkIf (names != []) (let
+    name = head names;
+    cfg = enabled.${name};
+    sliceUnit = toSliceUnit cfg.cgroup-parent;
+    ns =
+      if cfg.networkNamespace != null
+      then resolveNetns cfg.networkNamespace
+      else null;
+    settings = recursiveUpdate
+      {
+        use_default_settings = true;
+        general = {
+          instance_name = "searxng";
+          privacypolicy_url = false;
+          contact_url = false;
+          donation_url = false;
+        };
+        search = {
+          safe_search = 0;
+          autocomplete = "";
+          default_lang = "auto";
+          formats = [
+            "html"
+            "json"
+          ];
+        };
+        server = {
+          bind_address = cfg.host;
+          inherit (cfg) port;
+          base_url = "${cfg.url}/";
+          limiter = false;
+          public_instance = false;
+          image_proxy = false;
+          method = "GET";
+        };
+      }
+      cfg.settings;
+  in {
+    assertions = [
+      {
+        assertion = length names == 1;
+        message = "myOpt.searxng-compose: services.searx is a singleton, enable at most one instance (enabled: ${concatStringsSep ", " names})";
+      }
+    ];
+
     # Only declares the secret; the sops file stays with the caller
     # (sops.secrets.<key>.sopsFile or sops.defaultSopsFile).
-    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
-        optionalAttrs (cfg.envFile-key != null) {
-          ${cfg.envFile-key} = {};
-        })
-      enabled);
+    sops.secrets =
+      optionalAttrs (cfg.envFile-key != null) {
+        ${cfg.envFile-key} = {};
+      };
 
-    virtualisation.oci-containers.backend = "podman";
-    virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (name: cfg: let
-        sliceUnit = toSliceUnit cfg.cgroup-parent;
-        ns =
-          if cfg.networkNamespace != null
-          then resolveNetns cfg.networkNamespace
-          else null;
-        settingsFile = yamlFormat.generate "${cfg.serviceName}-settings.yml" (recursiveUpdate
-          {
-            use_default_settings = true;
-            general = {
-              instance_name = "searxng";
-              privacypolicy_url = false;
-              contact_url = false;
-              donation_url = false;
-            };
-            search = {
-              safe_search = 0;
-              autocomplete = "";
-              default_lang = "auto";
-              formats = [
-                "html"
-                "json"
-              ];
-            };
-            server = {
-              bind_address = cfg.host;
-              inherit (cfg) port;
-              limiter = false;
-              public_instance = false;
-              image_proxy = false;
-              method = "GET";
-            };
-          }
-          cfg.settings);
-      in {
-        ${cfg.serviceName} = {
-          inherit (cfg) serviceName image;
-          autoStart = false;
-          networks = optional (ns != null) "ns:${ns.path}";
-          volumes =
-            [
-              "${settingsFile}:/etc/searxng/settings.yml:ro"
-            ]
-            ++ optional (ns != null) "${ns.resolvConf}:/etc/resolv.conf:ro";
-          environment =
-            {
-              GRANIAN_HOST = cfg.host;
-              GRANIAN_PORT = toString cfg.port;
-              SEARXNG_PORT = toString cfg.port;
-              SEARXNG_BASE_URL = "${cfg.url}/";
-            }
-            // cfg.environment;
-          environmentFiles = optionals (cfg.envFile-key != null) [outerCfg.sops.secrets.${cfg.envFile-key}.path];
-          extraOptions =
-            [
-              "--user=977:977"
-              "--read-only"
-              "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m"
-              "--tmpfs=/run:rw,noexec,nosuid,nodev,size=16m"
-              "--tmpfs=/var/cache/searxng:rw,noexec,nosuid,nodev,size=128m,uid=977,gid=977"
-              "--cap-drop=ALL"
-              "--security-opt=no-new-privileges"
-              "--pids-limit=256"
-            ]
-            ++ optional (sliceUnit != null) "--cgroup-parent=${sliceUnit}";
-        };
-      })
-      enabled);
+    services.searx = {
+      enable = true;
+      inherit (cfg) package settings;
+      environmentFile =
+        if cfg.envFile-key != null
+        then outerCfg.sops.secrets.${cfg.envFile-key}.path
+        else null;
+    };
 
-    systemd.services = mkMerge (mapAttrsToList (_: cfg: let
-        sliceUnit = toSliceUnit cfg.cgroup-parent;
-        ns =
-          if cfg.networkNamespace != null
-          then resolveNetns cfg.networkNamespace
-          else null;
-      in {
-        ${cfg.serviceName} = mkMerge [
+    systemd.services.searx = mkMerge [
+      {
+        inherit (cfg) environment;
+        serviceConfig =
           {
-            serviceConfig = {
-              ProtectHome = true;
-              ProtectClock = true;
-              ProtectHostname = true;
-              ProtectKernelLogs = true;
-              ProtectKernelModules = true;
-              ProtectKernelTunables = true;
-              LockPersonality = true;
-              RestrictRealtime = true;
-              RestrictSUIDSGID = true;
-            };
+            ProtectHome = true;
+            ProtectClock = true;
+            ProtectHostname = true;
+            ProtectKernelLogs = true;
+            ProtectKernelModules = true;
+            ProtectKernelTunables = true;
+            LockPersonality = true;
+            RestrictRealtime = true;
+            RestrictSUIDSGID = true;
           }
-          (mkIf (ns != null) {
-            bindsTo = [ns.unit];
-            after = [ns.unit];
-          })
-          (mkIf (sliceUnit != null) {
-            serviceConfig.Slice = sliceUnit;
-          })
-        ];
+          // optionalAttrs (sliceUnit != null) {
+            Slice = sliceUnit;
+          }
+          // optionalAttrs (ns != null) {
+            NetworkNamespacePath = ns.path;
+            BindReadOnlyPaths = ["${ns.resolvConf}:/etc/resolv.conf"];
+          };
+      }
+      (mkIf (ns != null) {
+        bindsTo = [ns.unit];
+        after = [ns.unit];
       })
-      enabled);
-  };
+    ];
+  });
 }

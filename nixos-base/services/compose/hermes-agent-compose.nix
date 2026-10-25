@@ -167,10 +167,6 @@ in {
             type = types.bool;
             default = true;
           };
-          image = mkOption {
-            type = types.singleLineStr;
-            example = "docker.io/searxng/searxng:2026.5.9-0cba32c15";
-          };
           port = mkOption {
             type = types.port;
           };
@@ -290,7 +286,7 @@ in {
 
     myOpt.searxng-compose = mkMerge (mapAttrsToList (name: cfg: {
         ${name} = {
-          inherit (cfg.searxng) enable image port settings;
+          inherit (cfg.searxng) enable port settings;
           inherit (cfg) cgroup-parent networkNamespace;
         };
       })
