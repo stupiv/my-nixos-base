@@ -6,7 +6,6 @@
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.litellm;
-  secretKey = name: "${name}/litellm-envFile";
   mkHttpUrl = host: port: let
     bracketedHost =
       if hasPrefix "[" host
@@ -87,8 +86,9 @@ in {
           type = types.attrsOf types.str;
           default = {};
         };
-        sopsFile = mkOption {
-          type = types.nullOr types.anything;
+        # Name of the sops secret whose content is passed as EnvironmentFile.
+        envFile-key = mkOption {
+          type = types.nullOr types.singleLineStr;
           default = null;
         };
         sleep-on-idle = mkOption {
@@ -108,11 +108,12 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
-        ${secretKey name} = optionalAttrs (cfg.sopsFile != null) {
-          inherit (cfg) sopsFile;
-        };
-      })
+    # Only declares the secret; the sops file stays with the caller
+    # (sops.secrets.<key>.sopsFile or sops.defaultSopsFile).
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
+        optionalAttrs (cfg.envFile-key != null) {
+          ${cfg.envFile-key} = {};
+        })
       enabled);
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (
@@ -136,8 +137,10 @@ in {
       enabled);
 
     containers = mkMerge (mapAttrsToList (name: cfg: let
-        envPath = outerCfg.sops.secrets.${secretKey name}.path;
-        secretsDir = builtins.dirOf envPath;
+        envPath =
+          if cfg.envFile-key != null
+          then outerCfg.sops.secrets.${cfg.envFile-key}.path
+          else null;
         ns =
           if cfg.networkNamespace != null
           then resolveNetns cfg.networkNamespace
@@ -157,13 +160,15 @@ in {
                 hostPath = cfg.stateDir;
                 isReadOnly = false;
               };
-              ${secretsDir} = {
-                hostPath = secretsDir;
-                isReadOnly = true;
-              };
               ${cfg.socketDir} = {
                 hostPath = cfg.socketDir;
                 isReadOnly = false;
+              };
+            }
+            // optionalAttrs (envPath != null) {
+              ${builtins.dirOf envPath} = {
+                hostPath = builtins.dirOf envPath;
+                isReadOnly = true;
               };
             }
             // optionalAttrs (ns != null) {

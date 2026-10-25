@@ -8,7 +8,6 @@ with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.searxng-compose;
   yamlFormat = pkgs.formats.yaml {};
-  secretKey = name: "${name}/searxng-envFile";
   mkHttpUrl = host: port: let
     bracketedHost =
       if hasPrefix "[" host
@@ -69,8 +68,9 @@ in {
           type = types.anything;
           default = {};
         };
-        sopsFile = mkOption {
-          type = types.nullOr types.anything;
+        # Name of the sops secret whose content is passed as EnvironmentFile.
+        envFile-key = mkOption {
+          type = types.nullOr types.singleLineStr;
           default = null;
         };
         cgroup-parent = mkOption {
@@ -90,11 +90,12 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
-        ${secretKey name} = optionalAttrs (cfg.sopsFile != null) {
-          inherit (cfg) sopsFile;
-        };
-      })
+    # Only declares the secret; the sops file stays with the caller
+    # (sops.secrets.<key>.sopsFile or sops.defaultSopsFile).
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
+        optionalAttrs (cfg.envFile-key != null) {
+          ${cfg.envFile-key} = {};
+        })
       enabled);
 
     virtualisation.oci-containers.backend = "podman";
@@ -150,7 +151,7 @@ in {
               SEARXNG_BASE_URL = "${cfg.url}/";
             }
             // cfg.environment;
-          environmentFiles = [outerCfg.sops.secrets.${secretKey name}.path];
+          environmentFiles = optionals (cfg.envFile-key != null) [outerCfg.sops.secrets.${cfg.envFile-key}.path];
           extraOptions =
             [
               "--user=977:977"

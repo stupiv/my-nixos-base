@@ -11,7 +11,6 @@ with lib; let
   wgEnabled = filterAttrs (_: cfg: cfg.wireguard.enable) enabled;
   plainEnabled = filterAttrs (_: cfg: !cfg.wireguard.enable) enabled;
   ipv6OnlyEnabled = filterAttrs (_: cfg: cfg.ipv6-only) enabled;
-  wgSecretKey = name: "${name}/wireguardConfigFile";
 in {
   options.myOpt.netns = mkOption {
     default = {};
@@ -66,8 +65,9 @@ in {
           type = types.bool;
           default = false;
         };
-        sopsFile = mkOption {
-          type = types.nullOr types.anything;
+        # Name of the sops secret holding the WireGuard config file.
+        envFile-key = mkOption {
+          type = types.nullOr types.singleLineStr;
           default = null;
         };
         bridgeAddress = mkOption {
@@ -121,17 +121,21 @@ in {
     boot.kernel.sysctl."net.ipv4.ip_forward" = mkDefault 1;
     boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = mkDefault 1;
 
-    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
-        ${wgSecretKey name} = optionalAttrs (cfg.sopsFile != null) {
-          inherit (cfg) sopsFile;
-        };
-      })
+    # Only declares the secret; the sops file stays with the caller
+    # (sops.secrets.<key>.sopsFile or sops.defaultSopsFile).
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
+        optionalAttrs (cfg.envFile-key != null) {
+          ${cfg.envFile-key} = {};
+        })
       wgEnabled);
 
     vpnNamespaces = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.namespace} = {
           enable = true;
-          wireguardConfigFile = outerCfg.sops.secrets.${wgSecretKey name}.path;
+          wireguardConfigFile =
+            if cfg.envFile-key != null
+            then outerCfg.sops.secrets.${cfg.envFile-key}.path
+            else throw "myOpt.netns.${name}.envFile-key must name the sops secret holding the WireGuard config when wireguard.enable = true";
           inherit
             (cfg)
             bridgeAddress

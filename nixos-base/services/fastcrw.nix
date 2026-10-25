@@ -7,7 +7,6 @@
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.fastcrw;
-  secretKey = name: "${name}/fastcrw-envFile";
   mkHttpUrl = host: port: let
     bracketedHost =
       if hasPrefix "[" host
@@ -69,8 +68,9 @@ in {
           type = types.attrsOf types.str;
           default = {};
         };
-        sopsFile = mkOption {
-          type = types.nullOr types.anything;
+        # Name of the sops secret whose content is passed as EnvironmentFile.
+        envFile-key = mkOption {
+          type = types.nullOr types.singleLineStr;
           default = null;
         };
         cgroup-parent = mkOption {
@@ -86,11 +86,12 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
-        ${secretKey name} = optionalAttrs (cfg.sopsFile != null) {
-          inherit (cfg) sopsFile;
-        };
-      })
+    # Only declares the secret; the sops file stays with the caller
+    # (sops.secrets.<key>.sopsFile or sops.defaultSopsFile).
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
+        optionalAttrs (cfg.envFile-key != null) {
+          ${cfg.envFile-key} = {};
+        })
       enabled);
 
     systemd.services = mkMerge (mapAttrsToList (name: cfg: let
@@ -113,7 +114,6 @@ in {
             serviceConfig =
               {
                 ExecStart = "${cfg.package}/bin/crw-server";
-                EnvironmentFile = outerCfg.sops.secrets.${secretKey name}.path;
                 Restart = "on-failure";
                 DynamicUser = true;
                 NoNewPrivileges = true;
@@ -152,6 +152,9 @@ in {
                   "~@resources"
                 ];
                 UMask = "0077";
+              }
+              // optionalAttrs (cfg.envFile-key != null) {
+                EnvironmentFile = outerCfg.sops.secrets.${cfg.envFile-key}.path;
               }
               // optionalAttrs (ns != null) {
                 NetworkNamespacePath = ns.path;

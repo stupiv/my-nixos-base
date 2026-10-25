@@ -7,7 +7,6 @@
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.hermes-agent-compose;
-  secretKey = name: "${name}/hermes-agent-envFile";
   toSliceName = p: removeSuffix ".slice" p;
   toSliceUnit = p:
     if p == null
@@ -62,10 +61,17 @@ in {
               type = types.bool;
               default = false;
             };
+            # Name of the sops secret holding the WireGuard config file
+            # (myOpt.netns.<name>.envFile-key).
+            envFile-key = mkOption {
+              type = types.nullOr types.singleLineStr;
+              default = null;
+            };
           };
         };
-        sopsFile = mkOption {
-          type = types.nullOr types.anything;
+        # Name of the sops secret whose content is passed as EnvironmentFile.
+        envFile-key = mkOption {
+          type = types.nullOr types.singleLineStr;
           default = null;
         };
         socketDir = mkOption {
@@ -230,11 +236,12 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
-        ${secretKey name} = optionalAttrs (cfg.sopsFile != null) {
-          inherit (cfg) sopsFile;
-        };
-      })
+    # Only declares the secret; the sops file stays with the caller
+    # (sops.secrets.<key>.sopsFile or sops.defaultSopsFile).
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
+        optionalAttrs (cfg.envFile-key != null) {
+          ${cfg.envFile-key} = {};
+        })
       enabled);
 
     users.groups = mkMerge (mapAttrsToList (_: cfg: {
@@ -262,7 +269,7 @@ in {
           optionalAttrs (cfg.networkNamespace == name) {
             ${name} = {
               enable = true;
-              inherit (cfg) sopsFile;
+              envFile-key = cfg.netns.wireguard.envFile-key;
               inherit (cfg.netns) ipv6-only;
               wireguard = {
                 inherit (cfg.netns.wireguard) enable;
@@ -276,7 +283,7 @@ in {
         ${name} = {
           enable = true;
           inherit (cfg.camofox) image port telemetry;
-          inherit (cfg) sopsFile cgroup-parent networkNamespace;
+          inherit (cfg) cgroup-parent networkNamespace;
         };
       })
       enabled);
@@ -284,7 +291,7 @@ in {
     myOpt.searxng-compose = mkMerge (mapAttrsToList (name: cfg: {
         ${name} = {
           inherit (cfg.searxng) enable image port settings;
-          inherit (cfg) sopsFile cgroup-parent networkNamespace;
+          inherit (cfg) cgroup-parent networkNamespace;
         };
       })
       enabled);
@@ -293,7 +300,7 @@ in {
         ${name} = {
           enable = true;
           inherit (cfg.litellm) stateDir port telemetry settings;
-          inherit (cfg) socketDir sopsFile cgroup-parent networkNamespace;
+          inherit (cfg) socketDir cgroup-parent networkNamespace;
         };
       })
       enabled);
@@ -304,7 +311,7 @@ in {
       in {
         ${name} = {
           inherit (cfg.fastcrw) enable port;
-          inherit (cfg) sopsFile cgroup-parent networkNamespace;
+          inherit (cfg) cgroup-parent networkNamespace;
           environment =
             {
               CRW_RENDERER__CAMOUFOX__BASE_URL = camofoxCfg.url;
@@ -321,7 +328,7 @@ in {
     myOpt.qdrant = mkMerge (mapAttrsToList (name: cfg: {
         ${name} = {
           inherit (cfg.qdrant) enable stateDir httpPort grpcPort telemetry;
-          inherit (cfg) sopsFile cgroup-parent networkNamespace;
+          inherit (cfg) cgroup-parent networkNamespace;
         };
       })
       enabled);
@@ -355,8 +362,10 @@ in {
         camofoxCfg = outerCfg.myOpt.camofox-compose.${name};
         fastcrwCfg = outerCfg.myOpt.fastcrw.${name};
         qdrantCfg = outerCfg.myOpt.qdrant.${name};
-        envPath = outerCfg.sops.secrets.${secretKey name}.path;
-        secretsDir = builtins.dirOf envPath;
+        envPath =
+          if cfg.envFile-key != null
+          then outerCfg.sops.secrets.${cfg.envFile-key}.path
+          else null;
         netnsCfg =
           if cfg.networkNamespace != null
           then outerCfg.myOpt.netns.${cfg.networkNamespace} or null
@@ -385,13 +394,15 @@ in {
                 hostPath = cfg.hermes-agent.stateDir;
                 isReadOnly = false;
               };
-              ${secretsDir} = {
-                hostPath = secretsDir;
-                isReadOnly = true;
-              };
               ${cfg.socketDir} = {
                 hostPath = cfg.socketDir;
                 isReadOnly = false;
+              };
+            }
+            // optionalAttrs (envPath != null) {
+              ${builtins.dirOf envPath} = {
+                hostPath = builtins.dirOf envPath;
+                isReadOnly = true;
               };
             }
             // optionalAttrs (cfg.networkNamespace != null) {
@@ -444,7 +455,7 @@ in {
                 // optionalAttrs cfg.qdrant.enable {
                   QDRANT_URL = qdrantCfg.httpUrl;
                 };
-              environmentFiles = [envPath];
+              environmentFiles = optionals (envPath != null) [envPath];
             };
             systemd.services.hermes-agent.serviceConfig = {
               NoNewPrivileges = true;
