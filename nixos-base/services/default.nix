@@ -9,7 +9,7 @@
     ./litellm.nix
     ./netns.nix
     ./proxy-compose.nix
-    ./qdrant.nix
+    ../unmaintained/qdrant.nix
     ./rclone-automount.nix
     ./searxng.nix
     ./systemd-socket-proxyd.nix
