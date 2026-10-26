@@ -2,8 +2,8 @@
   imports = [
     ./frappe-compose
     # ./unmaintained
+    ./WIP
     # ./default.nix
-    ./hermes-agent-compose.nix
     ./n8n-compose.nix
     ./plausible-compose.nix
   ];

@@ -1,12 +1,14 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
   outerCfg = config;
-  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.camofox-compose;
-  secretKey = name: "${name}/camofox-envFile";
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.searxng;
+  yamlFormat = pkgs.formats.yaml {};
+  secretKey = name: "${name}/searxng-envFile";
   mkHttpUrl = host: port: let
     bracketedHost =
       if hasPrefix "[" host
@@ -34,7 +36,7 @@ with lib; let
       unit = "${nsName}.service";
     };
 in {
-  options.myOpt.camofox-compose = mkOption {
+  options.myOpt.searxng = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;
@@ -46,11 +48,11 @@ in {
         };
         serviceName = mkOption {
           type = types.singleLineStr;
-          default = "${name}-camofox";
+          default = "${name}-searxng";
         };
         image = mkOption {
           type = types.singleLineStr;
-          example = "ghcr.io/jo-inc/camofox-browser:1.18.1";
+          example = "docker.io/searxng/searxng:2026.5.9-0cba32c15";
         };
         host = mkOption {
           type = types.singleLineStr;
@@ -63,9 +65,9 @@ in {
           type = types.singleLineStr;
           default = mkHttpUrl cfg.host cfg.port;
         };
-        telemetry = mkOption {
-          type = types.bool;
-          default = true;
+        settings = mkOption {
+          type = types.anything;
+          default = {};
         };
         sopsFile = mkOption {
           type = types.nullOr types.anything;
@@ -102,30 +104,63 @@ in {
           if cfg.networkNamespace != null
           then resolveNetns cfg.networkNamespace
           else null;
+        settingsFile = yamlFormat.generate "${cfg.serviceName}-settings.yml" (recursiveUpdate
+          {
+            use_default_settings = true;
+            general = {
+              instance_name = "searxng";
+              privacypolicy_url = false;
+              contact_url = false;
+              donation_url = false;
+            };
+            search = {
+              safe_search = 0;
+              autocomplete = "";
+              default_lang = "auto";
+              formats = [
+                "html"
+                "json"
+              ];
+            };
+            server = {
+              bind_address = cfg.host;
+              inherit (cfg) port;
+              limiter = false;
+              public_instance = false;
+              image_proxy = false;
+              method = "GET";
+            };
+          }
+          cfg.settings);
       in {
         ${cfg.serviceName} = {
           inherit (cfg) serviceName image;
           autoStart = false;
           networks = optional (ns != null) "ns:${ns.path}";
-          volumes = optional (ns != null) "${ns.resolvConf}:/etc/resolv.conf:ro";
+          volumes =
+            [
+              "${settingsFile}:/etc/searxng/settings.yml:ro"
+            ]
+            ++ optional (ns != null) "${ns.resolvConf}:/etc/resolv.conf:ro";
           environment =
             {
-              CAMOFOX_BIND_HOST = cfg.host;
-              CAMOFOX_PORT = toString cfg.port;
-              CAMOFOX_CRASH_REPORT_ENABLED = boolToString cfg.telemetry;
+              GRANIAN_HOST = cfg.host;
+              GRANIAN_PORT = toString cfg.port;
+              SEARXNG_PORT = toString cfg.port;
+              SEARXNG_BASE_URL = "${cfg.url}/";
             }
             // cfg.environment;
           environmentFiles = [outerCfg.sops.secrets.${secretKey name}.path];
           extraOptions =
             [
-              "--shm-size=2g" # Firefox needs real shared memory; the default 64MB is not enough
+              "--user=977:977"
               "--read-only"
-              "--tmpfs=/tmp:rw,nosuid,nodev,size=512m"
-              "--tmpfs=/run:rw,noexec,nosuid,nodev,size=32m"
-              "--tmpfs=/root/.camofox:rw,noexec,nosuid,nodev,size=256m"
+              "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m"
+              "--tmpfs=/run:rw,noexec,nosuid,nodev,size=16m"
+              "--tmpfs=/var/cache/searxng:rw,noexec,nosuid,nodev,size=128m,uid=977,gid=977"
               "--cap-drop=ALL"
               "--security-opt=no-new-privileges"
-              "--pids-limit=512"
+              "--pids-limit=256"
             ]
             ++ optional (sliceUnit != null) "--cgroup-parent=${sliceUnit}";
         };

@@ -1,9 +1,14 @@
 {
   inputs = {
     nixpkgs.follows = "nixpkgs-2511";
-    nixpkgs-2511.url = "github:nixos/nixpkgs/e820eb4a444b46a19b2e03e8dfd2359439ff30fe"; # See https://channels.nixos.org/nixos-25.11
-    nixpkgs-2605.url = "github:nixos/nixpkgs/6d663c0533ff269008fb84e45930151e37c99db9"; # See https://channels.nixos.org/nixos-26.05
-    nixpkgs-2611.url = "github:nixos/nixpkgs/419fe0f449b3fbe3bdd53d9840288db4509ec32e"; # See https://channels.nixos.org/nixpkgs-unstable
+    nixpkgs-2511.url = "github:nixos/nixpkgs/e820eb4a444b46a19b2e03e8dfd2359439ff30fe"; # See https://channels.nixos.org/nixos-25.11/git-revision
+    nixpkgs-2605.url = "github:nixos/nixpkgs/6d663c0533ff269008fb84e45930151e37c99db9"; # See https://channels.nixos.org/nixos-26.05/git-revision
+    nixpkgs-2611.url = "github:nixos/nixpkgs/3ec636362e1816bc2f0888fa0fa2c69f1bc9e504"; # See https://channels.nixos.org/nixos-unstable/git-revision
+    hermes-agent.url = "github:NousResearch/hermes-agent/v0.21.7"; # No inputs follows for cache to work
+    home-manager = {
+      url = "github:nix-community/home-manager/release-25.11";
+      inputs.nixpkgs.follows = "nixpkgs-2511";
+    };
 
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
@@ -26,10 +31,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
-    home-manager = {
-      url = "github:nix-community/home-manager/release-25.11";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     zen-browser-flake = {
       url = "github:0xc000022070/zen-browser-flake";
       inputs = {
@@ -41,7 +42,6 @@
       url = "github:NixOS/nixos-hardware";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    hermes-agent.url = "github:NousResearch/hermes-agent/v0.21.7"; # No inputs follows for cache to work
     vpn-confinement.url = "github:Maroka-chan/VPN-Confinement";
   };
   outputs = inputs: (inputs.flake-parts.lib.mkFlake {inherit inputs;} {
