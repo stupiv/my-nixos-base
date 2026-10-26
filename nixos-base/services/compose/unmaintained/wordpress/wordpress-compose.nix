@@ -68,7 +68,7 @@ in {
           };
           origin.ip-socket = mkOption {
             type = types.singleLineStr;
-            default = containerCfg.services.phpfpm.pools."wordpress-${cfg.proxy-compose.hostName}".socket;
+            default = containerCfg.services.phpfpm.pools."wordpress-${cfg.proxy-compose.hostname}".socket;
             readOnly = true;
           };
         };
@@ -85,12 +85,12 @@ in {
           };
           uploadsDir = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostName}/uploads";
+            default = "${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostname}/uploads";
             readOnly = true;
           };
           fontsDir = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostName}/fonts";
+            default = "${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostname}/fonts";
             readOnly = true;
           };
           muPlugins = mkOption {
@@ -102,7 +102,7 @@ in {
                   <?php
                   add_action("wp_head", function () {
                       ?>
-                      <script defer data-domain="${cfg.proxy-compose.hostName}" src="https://${cfg.plausible-domain}/js/script.js"></script>
+                      <script defer data-domain="${cfg.proxy-compose.hostname}" src="https://${cfg.plausible-domain}/js/script.js"></script>
                       <?php
                   });
                 '';
@@ -179,12 +179,12 @@ in {
               #   not method POST
               #   not expression {query} != ""
               #   file {
-              #     root ${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostName}/cache-enabler/${cfg.proxy-compose.hostName}
+              #     root ${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostname}/cache-enabler/${cfg.proxy-compose.hostname}
               #     try_files {path}index.html
               #   }
               # }
               # handle @wpCache {
-              #   root * ${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostName}/cache-enabler/${cfg.proxy-compose.hostName}
+              #   root * ${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostname}/cache-enabler/${cfg.proxy-compose.hostname}
               #   file_server {
               #     precompressed
               #   }
@@ -195,19 +195,19 @@ in {
               # @wpStaticFiles {
               #   path_regexp path ^/wp-content/(?:uploads|fonts)/
               #   file {
-              #     root ${containerCfg.services.wordpress.sites.${cfg.proxy-compose.hostName}.finalPackage}/share/wordpress
+              #     root ${containerCfg.services.wordpress.sites.${cfg.proxy-compose.hostname}.finalPackage}/share/wordpress
               #     try_files {path}
               #   }
               # }
               # handle @wpStaticFiles {
-              #   root * ${containerCfg.services.wordpress.sites.${cfg.proxy-compose.hostName}.finalPackage}/share/wordpress
+              #   root * ${containerCfg.services.wordpress.sites.${cfg.proxy-compose.hostname}.finalPackage}/share/wordpress
               #   file_server
               #   header +Cache-Control "public, max-age=${toString cfg.max-age}, stale-while-revalidate=31536000, stale-if-error=31536000"
               # }
               extraConfig = ''
 
                 handle {
-                  root * ${containerCfg.services.wordpress.sites.${cfg.proxy-compose.hostName}.finalPackage}/share/wordpress
+                  root * ${containerCfg.services.wordpress.sites.${cfg.proxy-compose.hostname}.finalPackage}/share/wordpress
                   file_server
 
                   php_fastcgi ${config.myOpt.proxy-compose.${cfg.serviceName}.default-caddy-origin-ip-socket}
@@ -259,7 +259,7 @@ in {
                 };
                 users.groups.caddy.gid = config.ids.gids.caddy;
 
-                services.phpfpm.pools."wordpress-${cfg.proxy-compose.hostName}".phpPackage = cfg.php.package.buildEnv {
+                services.phpfpm.pools."wordpress-${cfg.proxy-compose.hostname}".phpPackage = cfg.php.package.buildEnv {
                   extensions = {
                     enabled,
                     all,
@@ -275,13 +275,13 @@ in {
 
                 systemd.tmpfiles.rules =
                   map (
-                    wp_path: "d '${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostName}${wp_path}' 0750 wordpress caddy - -"
+                    wp_path: "d '${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostname}${wp_path}' 0750 wordpress caddy - -"
                   )
                   cfg.wordpress.symlinks;
 
                 services.wordpress = {
                   webserver = "caddy";
-                  sites.${cfg.proxy-compose.hostName} = {
+                  sites.${cfg.proxy-compose.hostname} = {
                     inherit (cfg.wordpress) themes plugins fontsDir uploadsDir;
                     extraConfig =
                       ''
@@ -298,8 +298,8 @@ in {
                       {
                         WP_CACHE = mkDefault true;
                         FORCE_SSL_ADMIN = true;
-                        WP_HOME = "https://${cfg.proxy-compose.hostName}";
-                        WP_SITEURL = "https://${cfg.proxy-compose.hostName}";
+                        WP_HOME = "https://${cfg.proxy-compose.hostname}";
+                        WP_SITEURL = "https://${cfg.proxy-compose.hostname}";
                       }
                       cfg.wordpress.settings
                     ];
@@ -325,7 +325,7 @@ in {
                             map (
                               wp_path: ''
                                 mkdir -p $out/share/wordpress${builtins.dirOf wp_path}
-                                ln -s ${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostName}${wp_path} $out/share/wordpress${wp_path}
+                                ln -s ${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostname}${wp_path} $out/share/wordpress${wp_path}
                               ''
                             )
                             cfg.wordpress.symlinks
@@ -353,7 +353,7 @@ in {
         "d '${builtins.dirOf cfg.origin.ip-socket}' - - - - -"
       ]
       ++ (map (
-          wp_path: "d '${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostName}${wp_path}' - - - - -"
+          wp_path: "d '${cfg.wordpress.stateDir}/${cfg.proxy-compose.hostname}${wp_path}' - - - - -"
         )
         cfg.wordpress.symlinks)))
     enabled-wordpress-compose

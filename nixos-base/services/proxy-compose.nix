@@ -73,7 +73,7 @@ in {
             default = "/run/proxy-compose/${name}/${name}.sock";
           };
         };
-        hostName = mkOption {
+        hostname = mkOption {
           type = types.singleLineStr;
         };
         caddy = {
@@ -132,7 +132,7 @@ in {
     myOpt.cloudflared = mkMerge (
       mapAttrsToList (name: cfg: {
         ${cfg.cloudflared.tunnel-id} = {
-          ingress.${cfg.hostName} = "unix:${cfg.cloudflared.unix-socket}";
+          ingress.${cfg.hostname} = "unix:${cfg.cloudflared.unix-socket}";
         };
       })
       enabled-cloudflared-proxy-compose
@@ -140,7 +140,7 @@ in {
 
     services.caddy = mkMerge (mapAttrsToList (
         _: cfg: let
-          inherit (cfg) localMode caddy cloudflared hostName default-caddy-origin-ip-socket;
+          inherit (cfg) localMode caddy cloudflared hostname default-caddy-origin-ip-socket;
           inherit (cfg.caddy) add-handle-reverse-proxy add-encode request_body;
           extraConfig = ''
             ${caddy.extraConfig}
@@ -177,7 +177,7 @@ in {
             ${
               if localMode.enable
               then "http://${localMode.ip-socket}"
-              else hostName
+              else hostname
             } = {
               inherit extraConfig;
             };

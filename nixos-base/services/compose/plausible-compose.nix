@@ -136,7 +136,7 @@ in {
                     clickhouse.setup = true;
                   };
                   server = {
-                    baseUrl = "https://${cfg.proxy-compose.hostName}/";
+                    baseUrl = "https://${cfg.proxy-compose.hostname}/";
                     secretKeybaseFile = outerCfg.sops.secrets.${cfg.secretKeybaseFile-key}.path;
                   };
                 };

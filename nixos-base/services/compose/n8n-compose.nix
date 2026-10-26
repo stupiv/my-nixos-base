@@ -134,8 +134,8 @@ in {
                   then "2"
                   else "1";
                 N8N_PROTOCOL = "https";
-                N8N_HOST = cfg.proxy-compose.hostName;
-                WEBHOOK_URL = "https://${cfg.proxy-compose.hostName}/";
+                N8N_HOST = cfg.proxy-compose.hostname;
+                WEBHOOK_URL = "https://${cfg.proxy-compose.hostname}/";
                 N8N_PORT = toString cfg.n8n.port;
                 NODE_ENV = "production";
                 GENERIC_TIMEZONE = config.time.timeZone;

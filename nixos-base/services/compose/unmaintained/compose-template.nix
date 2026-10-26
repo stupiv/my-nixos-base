@@ -20,13 +20,21 @@ in {
           type = types.bool;
           default = true;
         };
-        proxy-compose = mkOption {
-          type = types.anything;
+        modules = {
+          proxy-compose = mkOption {
+            type = types.anything;
+          };
         };
         serviceName = mkOption {
           type = types.singleLineStr;
           default = name;
           readOnly = true;
+        };
+        networkNamespace = mkOption {
+          type = types.singleLineStr;
+        };
+        cgroup-parent = mkOption {
+          type = types.singleLineStr;
         };
       };
     }));
