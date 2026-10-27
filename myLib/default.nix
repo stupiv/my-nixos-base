@@ -1,4 +1,9 @@
 {
+  imports = [
+    ./bracketIpv6.nix
+    ./splitLastColon.nix
+    ./unbracketIpv6.nix
+  ];
   nixpkgs.overlays = [
     (final: prev: {
       myLib = prev.lib.makeScope prev.newScope (self: {

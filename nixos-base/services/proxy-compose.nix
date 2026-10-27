@@ -5,8 +5,10 @@
   ...
 }:
 with lib; let
-  enabled-cloudflared-proxy-compose = filterAttrs (name: cfg: cfg.cloudflared.enable) config.myOpt.proxy-compose;
-
+  inherit (pkgs) myLib;
+  outerCfg = config;
+  enabled = filterAttrs (name: cfg: cfg.enable) outerCfg.myOpt.proxy-compose;
+  enabled-cloudflared = filterAttrs (name: cfg: cfg.cloudflared.enable) enabled;
   to-caddy-ip-socket = ip-socket: (
     if (hasPrefix "/" ip-socket)
     then "unix/${ip-socket}"
@@ -19,21 +21,33 @@ in {
       cfg = innerArgs.config;
     in {
       options = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+        modules = {
+          cloudflared = mkOption {
+            type = types.anything;
+            default = {};
+          };
+        };
         localMode = {
           enable = mkOption {
             type = types.bool;
             default = false;
           };
-          ip-address = mkOption {
+          host = mkOption {
             type = types.singleLineStr;
             default = "localhost";
+            # default = "::1";
           };
           port = mkOption {
             type = types.port;
           };
           ip-socket = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.localMode.ip-address}:${toString cfg.localMode.port}";
+            default = "${cfg.localMode.host}:${toString cfg.localMode.port}";
+            # default = myLib.bracketIpv6 "${cfg.localMode.host}:${toString cfg.localMode.port}";
           };
         };
         serviceName = mkOption {
@@ -61,12 +75,8 @@ in {
         cloudflared = {
           enable = mkOption {
             type = types.bool;
-            default = cfg.cloudflared.tunnel-id != null;
+            default = cfg.modules.cloudflared != {};
             readOnly = true;
-          };
-          tunnel-id = mkOption {
-            type = types.nullOr types.singleLineStr;
-            default = null;
           };
           unix-socket = mkOption {
             type = types.strMatching "^\/run\/.+\/.+$";
@@ -122,20 +132,26 @@ in {
           assertion = !(localMode.enable && cloudflared.enable);
         }
       ])
-      config.myOpt.proxy-compose);
+      enabled);
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
         "d ${builtins.dirOf cfg.cloudflared.unix-socket} 777 - - - -"
       ])
-      enabled-cloudflared-proxy-compose);
+      enabled-cloudflared);
 
     myOpt.cloudflared = mkMerge (
       mapAttrsToList (name: cfg: {
-        ${cfg.cloudflared.tunnel-id} = {
-          ingress.${cfg.hostname} = "unix:${cfg.cloudflared.unix-socket}";
-        };
+        ${cfg.modules.cloudflared.tunnel-id} = mkMerge [
+          cfg.modules.cloudflared
+          {
+            enable = true;
+            tunnelCfg = {
+              ingress.${cfg.hostname} = "unix:${cfg.cloudflared.unix-socket}";
+            };
+          }
+        ];
       })
-      enabled-cloudflared-proxy-compose
+      enabled-cloudflared
     );
 
     services.caddy = mkMerge (mapAttrsToList (
@@ -184,17 +200,17 @@ in {
           };
         }
       )
-      config.myOpt.proxy-compose);
+      enabled);
 
     myOpt.sleep-on-idle =
       mapAttrs' (_: cfg: (nameValuePair cfg.serviceName cfg.sleep-on-idle))
-      config.myOpt.proxy-compose;
+      enabled;
 
     containers =
       mapAttrs' (_: cfg: (nameValuePair cfg.containerName {
         ephemeral = mkDefault true;
         config.nixpkgs.pkgs = pkgs;
       }))
-      (filterAttrs (_: cfg: cfg.containerName != null) config.myOpt.proxy-compose);
+      (filterAttrs (_: cfg: cfg.containerName != null) enabled);
   };
 }

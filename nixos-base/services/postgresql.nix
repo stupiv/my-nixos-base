@@ -5,9 +5,9 @@
 }:
 with lib; let
   outerCfg = config;
-  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.postgresql-compose;
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.postgresql;
 in {
-  options.myOpt.postgresql-compose = mkOption {
+  options.myOpt.postgresql = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;
@@ -17,9 +17,14 @@ in {
           type = types.bool;
           default = true;
         };
-        container = {
+        container = mkOption {
           type = types.anything;
           default = {};
+        };
+        stateDir = mkOption {
+          type = types.anything;
+          default = "${cfg.container.stateDir}/postgresql";
+          readOnly = true;
         };
         postgresql = mkOption {
           type = types.anything;
@@ -33,12 +38,16 @@ in {
     containers = mkMerge (mapAttrsToList (_: cfg: {
         ${cfg.container.name} = {
           config = {...}: {
+            systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
+                "d '${cfg.stateDir}' 0700 postgres postgres - -"
+              ])
+              enabled);
             services.postgresql = mkMerge [
               cfg.postgresql
               {
-                inherit (cfg.postgresql) package;
                 enable = true;
-                dataDir = "${cfg.container.stateDir}/postgresql";
+                package = mkDefault cfg.postgresql.package;
+                dataDir = cfg.stateDir;
               }
             ];
           };

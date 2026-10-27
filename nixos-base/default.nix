@@ -1,6 +1,7 @@
 {
   imports = [
     ../myLib
+    ../myPkgs
     ./2511
     ./dnscrypt
     ./services

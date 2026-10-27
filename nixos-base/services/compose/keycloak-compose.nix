@@ -5,7 +5,7 @@
 }:
 with lib; let
   outerCfg = config;
-  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.keycloak-compose;
+  enabled = filterAttrs (name: cfg: cfg.enable) outerCfg.myOpt.keycloak-compose;
 in {
   options.myOpt.keycloak-compose = mkOption {
     default = {};
@@ -49,19 +49,55 @@ in {
           default = "container@${cfg.container.name}";
           readOnly = true;
         };
+        database.port = mkOption {
+          type = types.port;
+          default = 15447;
+        };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
-    myOpt.proxy-compose = mapAttrs' (_: cfg:
+    myOpt.proxy-compose = mapAttrs' (name: cfg:
       nameValuePair cfg.serviceName (mkMerge [
         cfg.modules.proxy-compose
         {
+          enable = true;
           localMode.port = mkDefault 33553;
           sleep-on-idle = {
             health-check.path = "/";
-            endpoints.default.origin.ip-socket = outerCfg.myOpt.keycloak.unix-socket;
+            endpoints.default.origin.ip-socket = outerCfg.myOpt.keycloak.${name}.unix-socket;
+          };
+        }
+      ]))
+    enabled;
+
+    myOpt.keycloak = mapAttrs' (name: cfg: let
+      inherit (outerCfg.myOpt.proxy-compose.${cfg.serviceName}) localMode hostname;
+    in
+      nameValuePair name (mkMerge [
+        cfg.modules.keycloak
+        {
+          inherit (cfg) container;
+          enable = true;
+          keycloak = {
+            plugins = with cfg.modules.keycloak.keycloak.package.plugins; [
+              junixsocket-common
+              junixsocket-native-common
+            ];
+            database = {
+              inherit (cfg.database) port;
+              type = "postgresql";
+              createLocally = false;
+              host = "/run/postgresql";
+            };
+            settings = {
+              hostname = (
+                if (localMode.enable)
+                then "http://${localMode.ip-socket}"
+                else "https://${hostname}"
+              );
+            };
           };
         }
       ]))
@@ -73,52 +109,38 @@ in {
         {
           inherit (cfg) container;
           enable = true;
-        }
-      ]))
-    enabled;
-
-    myOpt.keycloak = mapAttrs' (name: cfg:
-      nameValuePair name (mkMerge [
-        cfg.modules.keycloak
-        {
-          inherit (cfg) container;
-          enable = true;
-          keycloak = {
-            database = {
-              type = "postgresql";
-              host = "/run/postgresql";
-              createLocally = true;
-            };
+          postgresql = {
             settings = {
-              hostname = cfg.modules.proxy-compose.hostname;
+              inherit (cfg.database) port;
             };
+            ensureDatabases = ["keycloak"];
+            ensureUsers = [
+              {
+                name = "keycloak";
+                ensureDBOwnership = true;
+              }
+            ];
           };
         }
       ]))
     enabled;
 
-    systemd.tmpfiles.rules = flatten (mapAttrsToList (_: cfg: [
-        "d '${cfg.stateDir}' 0700 - - - -"
-        "d '${cfg.shared-run-dir}' 0700 - - - -"
+    systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
+        "d '${cfg.container.stateDir}' 0711 root root - -"
+        "d '${cfg.container.shared-run-dir}' 0711 root root - -"
       ])
       enabled);
 
-    containers = mkMerge (mapAttrsToList (_: cfg: {
+    containers = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.container.name} = {
           ephemeral = true;
           privateNetwork = true;
           privateUsers = "pick";
           autoStart = false;
-          bindMounts = {
-            ${cfg.stateDir} = {
-              hostPath = cfg.stateDir;
-              isReadOnly = false;
-            };
-            ${cfg.shared-run-dir} = {
-              hostPath = cfg.shared-run-dir;
-              isReadOnly = false;
-            };
-          };
+          extraFlags = [
+            "--bind=${cfg.container.stateDir}:${cfg.container.stateDir}:idmap"
+            "--bind=${cfg.container.shared-run-dir}:${cfg.container.shared-run-dir}:rootidmap"
+          ];
         };
       })
       enabled);

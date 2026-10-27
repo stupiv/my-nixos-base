@@ -8,13 +8,13 @@
 with lib; let
   inherit (pkgs.myLib) mkEndpointOpt;
   enabled = filterAttrs (_: cfg: cfg.enable) config.myOpt.systemd-socket-proxyd;
-  custom-mkEndpointOpt = args: ((mkEndpointOpt args)
-    // {
-      serviceName = mkOption {
-        type = types.nullOr types.singleLineStr;
-        default = args.serviceName;
-      };
-    });
+  # custom-mkEndpointOpt = args: ((mkEndpointOpt args)
+  #   // {
+  #     serviceName = mkOption {
+  #       type = types.nullOr types.singleLineStr;
+  #       default = args.serviceName;
+  #     };
+  #   });
 in {
   imports = [
     ../../myLib
@@ -34,16 +34,27 @@ in {
           type = types.bool;
           default = true;
         };
-        origin = custom-mkEndpointOpt {
-          cfg = cfg.origin;
-          serviceName = name;
-          ipv6-brackets = false; # proxyd dial target: no brackets
-        };
-        proxy = custom-mkEndpointOpt {
-          cfg = cfg.proxy;
-          serviceName = "${cfg.origin.serviceName}-proxy";
-          ipv6-brackets = true; # ListenStream=: brackets required
-        };
+        origin =
+          mkEndpointOpt {
+            cfg = cfg.origin;
+            ipv6-brackets = false; # proxyd dial target: no brackets
+          }
+          // {
+            serviceName = mkOption {
+              type = types.singleLineStr;
+            };
+          };
+        proxy =
+          mkEndpointOpt {
+            cfg = cfg.proxy;
+            ipv6-brackets = true; # ListenStream=: brackets required
+          }
+          // {
+            serviceName = mkOption {
+              type = types.singleLineStr;
+              default = "${cfg.origin.serviceName}-proxy";
+            };
+          };
       };
     }));
   };

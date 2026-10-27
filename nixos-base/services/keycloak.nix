@@ -5,9 +5,9 @@
 }:
 with lib; let
   outerCfg = config;
-  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.keycloak-compose;
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.keycloak;
 in {
-  options.myOpt.keycloak-compose = mkOption {
+  options.myOpt.keycloak = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;
@@ -17,7 +17,7 @@ in {
           type = types.bool;
           default = true;
         };
-        container = {
+        container = mkOption {
           type = types.anything;
           default = {};
         };
@@ -41,20 +41,22 @@ in {
             innerCfg = innerArgs.config;
           in {
             imports = [
-              ../systemd-socket-proxyd.nix
+              ./systemd-socket-proxyd.nix
             ];
-            myOpt.systemd-socket-proxyd."keycloak-${name}" = {
+
+            myOpt.systemd-socket-proxyd.${name} = {
               origin = {
                 host = innerCfg.services.keycloak.settings.http-host;
                 port = innerCfg.services.keycloak.settings.http-port;
+                serviceName = "keycloak";
               };
               proxy.ip-socket = cfg.unix-socket;
             };
             services.keycloak = mkMerge [
               cfg.keycloak
               {
-                inherit package;
                 enable = true;
+                package = mkDefault cfg.keycloak.package;
                 database = {
                   inherit (cfg.keycloak.database) type host createLocally;
                 };
@@ -62,6 +64,8 @@ in {
                   inherit (cfg.keycloak.settings) hostname;
                   http-host = mkDefault "::1";
                   http-port = mkDefault 25546;
+                  http-enabled = mkDefault true;
+                  proxy-headers = mkDefault "xforwarded";
                 };
               }
             ];
