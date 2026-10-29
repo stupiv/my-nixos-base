@@ -6,6 +6,7 @@
     ./fastcrw.nix
     ./litellm.nix
     ./netns.nix
+    ./proxy-compose-v2.nix
     ./searxng.nix
   ];
 }
