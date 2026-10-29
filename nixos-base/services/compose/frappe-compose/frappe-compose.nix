@@ -1,6 +1,3 @@
-# - [ ] extraOptions = [ "--cgroup-parent=${sliceName}.slice" ];
-# - [ ] You froze the systemd services not the OCI containers.
-# - [ ] systemd/oci hardening
 {
   config,
   lib,
@@ -8,7 +5,8 @@
   ...
 }:
 with lib; let
-  enabled-frappe-compose = filterAttrs (_: cfg: cfg.enable) config.myOpt.frappe-compose;
+  outerCfg = config;
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.frappe-compose;
   autoStart = false;
 
   in-container-bench-dir = "/home/frappe/frappe-bench";
@@ -53,11 +51,9 @@ with lib; let
 in {
   options.myOpt.frappe-compose = mkOption {
     default = {};
-    type = types.attrsOf (types.submodule ({
-      name,
-      config,
-      ...
-    }: {
+    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
+      cfg = innerArgs.config;
+    in {
       options = {
         enable = mkOption {
           type = types.bool;
@@ -270,9 +266,9 @@ in {
   };
 
   config = {
-    virtualisation.oci-containers.backend = mkIf (enabled-frappe-compose != {}) "podman";
-    virtualisation.podman.defaultNetwork.settings.dns_enabled = mkIf (enabled-frappe-compose != {}) true;
-    assertions = mkIf (enabled-frappe-compose != {}) [
+    virtualisation.oci-containers.backend = mkIf (enabled != {}) "podman";
+    virtualisation.podman.defaultNetwork.settings.dns_enabled = mkIf (enabled != {}) true;
+    assertions = mkIf (enabled != {}) [
       {
         assertion = (config.virtualisation.oci-containers.backend == "podman") && config.virtualisation.podman.defaultNetwork.settings.dns_enabled;
       }
@@ -284,7 +280,7 @@ in {
           ${cfg.mariadb.envfile-key} = {};
         }
       )
-      enabled-frappe-compose);
+      enabled);
 
     myOpt.proxy-compose =
       mapAttrs' (name: cfg: (nameValuePair cfg.frappe.frontend.serviceName (mkMerge [
@@ -316,7 +312,7 @@ in {
           };
         }
       ])))
-      enabled-frappe-compose;
+      enabled;
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
         "d ${cfg.frappe.sitesDir} 700 1000 1000 - -"
@@ -328,7 +324,7 @@ in {
         "d ${cfg.valkey.cache.socket-folder} 700 1000 1000 - -"
         "d ${cfg.valkey.queue.socket-folder} 700 1000 1000 - -"
       ])
-      enabled-frappe-compose);
+      enabled);
 
     systemd.services = mkMerge (mapAttrsToList (name: cfg: (let
         CONFIGURATOR = "${cfg.frappe.configurator.serviceName}.service";
@@ -361,7 +357,7 @@ in {
           };
         };
       }))
-      enabled-frappe-compose);
+      enabled);
 
     virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (
         name: cfg: let
@@ -590,6 +586,6 @@ in {
           ];
         }
       )
-      enabled-frappe-compose);
+      enabled);
   };
 }
