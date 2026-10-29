@@ -1,0 +1,3 @@
+{
+  imports = [./frappe-compose.nix];
+}
