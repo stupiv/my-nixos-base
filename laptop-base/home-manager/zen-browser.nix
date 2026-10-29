@@ -6,14 +6,32 @@
   ...
 }:
 with lib; let
-  cfg = config.programs.zen-browser;
+  cfg = config.myOpt.zen-browser;
   mkPath = pkg: desktop: "${pkg}/share/applications/${desktop}";
 in {
   imports = [inputs.zen-browser-flake.homeModules.default];
-  programs.zen-browser = {
-    enable = mkDefault false;
-    nixGL.enable = mkDefault true;
-    setAsDefaultBrowser = mkDefault true;
+
+  options.myOpt.zen-browser = {
+    enable = mkOption {
+      type = types.bool;
+      default = false;
+    };
+    autoStart = mkOption {
+      type = types.bool;
+      default = true;
+    };
+    setAsDefaultBrowser = mkOption {
+      type = types.bool;
+      default = true;
+    };
   };
-  xdg.autostart.entries = optional cfg.enable (mkPath cfg.package "zen-beta.desktop");
+
+  config = mkIf (cfg.enable) {
+    programs.zen-browser = {
+      enable = true;
+      nixGL.enable = mkDefault true;
+      setAsDefaultBrowser = cfg.setAsDefaultBrowser;
+    };
+    xdg.autostart.entries = optional cfg.autoStart (mkPath cfg.package "zen-beta.desktop");
+  };
 }
