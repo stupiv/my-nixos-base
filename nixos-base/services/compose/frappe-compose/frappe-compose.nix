@@ -99,7 +99,7 @@ in {
           };
           branch = mkOption {
             type = types.singleLineStr;
-            default = config.frappe.base.tag; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
+            default = cfg.frappe.base.tag; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
             readOnly = true;
           };
           base = {
@@ -109,7 +109,7 @@ in {
             };
             image = mkOption {
               type = types.singleLineStr;
-              default = "docker.io/frappe/base:${config.frappe.base.tag}";
+              default = "docker.io/frappe/base:${cfg.frappe.base.tag}";
               readOnly = true;
             };
           };
@@ -121,7 +121,7 @@ in {
             };
             tag = mkOption {
               type = types.singleLineStr;
-              default = config.frappe.apps.erpnext.branch; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
+              default = cfg.frappe.apps.erpnext.branch; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
               example = "v16.26.2";
             };
           };
@@ -246,7 +246,7 @@ in {
           queue = {
             stateDir = mkOption {
               type = types.singleLineStr;
-              default = "${config.valkey.stateDir}/queue_data";
+              default = "${cfg.valkey.stateDir}/queue_data";
               readOnly = true;
             };
             serviceName = mkOption {
