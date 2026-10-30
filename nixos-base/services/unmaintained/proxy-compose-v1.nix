@@ -7,7 +7,7 @@
 with lib; let
   inherit (pkgs) myLib;
   outerCfg = config;
-  enabled = filterAttrs (name: cfg: cfg.enable) outerCfg.myOpt.proxy-compose-v2;
+  enabled = filterAttrs (name: cfg: cfg.enable) outerCfg.myOpt.proxy-compose;
   enabled-cloudflared = filterAttrs (name: cfg: cfg.cloudflared.enable) enabled;
   to-caddy-ip-socket = ip-socket: (
     if (hasPrefix "/" ip-socket)
@@ -15,7 +15,7 @@ with lib; let
     else ip-socket
   );
 in {
-  options.myOpt.proxy-compose-v2 = mkOption {
+  options.myOpt.proxy-compose = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;
@@ -65,7 +65,7 @@ in {
             else null;
           readOnly = true;
         };
-        sleep-on-idle-v2 = mkOption {
+        sleep-on-idle = mkOption {
           type = types.anything;
         };
         oci-containers = mkOption {
@@ -80,7 +80,7 @@ in {
           };
           unix-socket = mkOption {
             type = types.strMatching "^\/run\/.+\/.+$";
-            default = "/run/proxy-compose-v2/${name}/${name}.sock";
+            default = "/run/proxy-compose/${name}/${name}.sock";
           };
         };
         hostname = mkOption {
@@ -97,7 +97,7 @@ in {
           };
           add-handle-reverse-proxy = mkOption {
             type = types.bool;
-            default = config.myOpt.sleep-on-idle-v2.${cfg.serviceName}.endpoints ? default;
+            default = config.myOpt.sleep-on-idle.${cfg.serviceName}.endpoints ? default;
           };
           request_body.max_size = mkOption {
             type = types.str;
@@ -107,7 +107,7 @@ in {
         default-caddy-origin-ip-socket = mkOption {
           type = types.nullOr (types.strMatching "^[^\/].+$");
           default = let
-            inherit (config.myOpt.sleep-on-idle-v2.${name}) endpoints;
+            inherit (config.myOpt.sleep-on-idle.${name}) endpoints;
           in (
             if endpoints ? default
             then to-caddy-ip-socket endpoints.default.proxy.ip-socket
@@ -122,7 +122,7 @@ in {
   config = {
     assertions = flatten (mapAttrsToList (name: cfg: let
         inherit (cfg.caddy) add-handle-reverse-proxy;
-        inherit (config.myOpt.sleep-on-idle-v2.${name}) endpoints;
+        inherit (config.myOpt.sleep-on-idle.${name}) endpoints;
         inherit (cfg) localMode cloudflared;
       in [
         {
@@ -202,8 +202,8 @@ in {
       )
       enabled);
 
-    myOpt.sleep-on-idle-v2 =
-      mapAttrs' (_: cfg: (nameValuePair cfg.serviceName cfg.sleep-on-idle-v2))
+    myOpt.sleep-on-idle =
+      mapAttrs' (_: cfg: (nameValuePair cfg.serviceName cfg.sleep-on-idle))
       enabled;
 
     containers =

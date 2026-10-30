@@ -6,7 +6,7 @@
 with lib; let
   inherit (pkgs.myLib) mkEndpointOpt;
 in {
-  options.myOpt.sleep-on-idle-v2 = mkOption {
+  options.myOpt.sleep-on-idle = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({
       name,
@@ -36,7 +36,7 @@ in {
               proxy =
                 (mkEndpointOpt {
                   cfg = config.proxy;
-                  default-ip-socket = "/run/sleep-on-idle-v2/${serviceName}/${name}.sock";
+                  default-ip-socket = "/run/sleep-on-idle/${serviceName}/${name}.sock";
                   ipv6-brackets = true; # ListenStream=: brackets required
                 })
                 // {

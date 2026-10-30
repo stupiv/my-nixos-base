@@ -45,5 +45,5 @@ in {
         };
       })))
       cfg1.endpoints)
-  config.myOpt.sleep-on-idle-v2;
+  config.myOpt.sleep-on-idle;
 }

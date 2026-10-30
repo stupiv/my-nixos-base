@@ -1,33 +1,41 @@
 {
-  pkgs,
+  config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
+  outerCfg = config;
   inherit (pkgs.myLib) mkEndpointOpt;
 in {
   options.myOpt.sleep-on-idle = mkOption {
     default = {};
-    type = types.attrsOf (types.submodule ({
-      name,
-      config,
-      ...
-    }: let
-      inherit (config) serviceName;
+    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
+      cfg = innerArgs.config;
     in {
       options = {
-        serviceName = mkOption {
-          type = types.singleLineStr;
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+        sliceName = mkOption {
           default = name;
+        };
+        sliceUnit = mkOption {
+          default = "${cfg.sliceName}.slice";
           readOnly = true;
+        };
+        sleep = {
+          sytemd-services = mkOption {
+            type = types.listOf types.singleLineStr;
+          };
+          oci-containers = mkOption {
+            type = types.listOf types.singleLineStr;
+          };
         };
         endpoints = mkOption {
           default = {};
-          type = types.attrsOf (types.submodule ({
-            name,
-            config,
-            ...
-          }: {
+          type = types.attrsOf (types.submodule ({name, ...} @ endPointArgs: {
             options = {
               origin = mkEndpointOpt {
                 cfg = config.origin;
@@ -36,14 +44,13 @@ in {
               proxy =
                 (mkEndpointOpt {
                   cfg = config.proxy;
-                  default-ip-socket = "/run/sleep-on-idle/${serviceName}/${name}.sock";
+                  default-ip-socket = "/run/sleep-on-idle/${cfg.sliceName}/${endPointArgs.name}.sock";
                   ipv6-brackets = true; # ListenStream=: brackets required
                 })
                 // {
                   name = mkOption {
                     type = types.singleLineStr;
-                    default = "${serviceName}-proxy-${name}";
-                    readOnly = true;
+                    default = "${cfg.sliceName}-proxy-${endPointArgs.name}";
                   };
                 };
             };
@@ -59,11 +66,8 @@ in {
         };
         health-check =
           (mkEndpointOpt {
-            cfg = config.health-check;
-            default-ip-socket =
-              if config.endpoints ? default
-              then config.endpoints.default.origin.ip-socket
-              else null;
+            cfg = cfg.health-check;
+            default-ip-socket = cfg.endpoints.default.origin.ip-socket;
             ipv6-brackets = true; # curl URL: brackets required
           })
           // {
@@ -75,37 +79,12 @@ in {
               type = types.singleLineStr;
             };
           };
-        dependsOn = mkOption {
-          type = types.listOf types.singleLineStr;
-          default = [];
-          example = [
-            "a-service-without-dot-service"
-          ];
-        };
-        sliceName = mkOption {
-          type = types.nullOr types.singleLineStr;
-          default =
-            if config.dependsOn != []
-            then serviceName
-            else null;
-          readOnly = true;
-        };
-        thawName = mkOption {
-          type = types.singleLineStr;
-          default = "${serviceName}-thaw";
-          readOnly = true;
-        };
         freezeName = mkOption {
           type = types.singleLineStr;
-          default = "${serviceName}-freeze";
-          readOnly = true;
+          default = "${cfg.sliceName}-freeze";
         };
-        SLICE_or_SERVICE = mkOption {
-          type = types.nullOr types.singleLineStr;
-          default =
-            if config.sliceName != null
-            then "${config.sliceName}.slice"
-            else "${serviceName}.service";
+        freezeUnit = mkOption {
+          default = "${cfg.freezeName}.service";
           readOnly = true;
         };
       };

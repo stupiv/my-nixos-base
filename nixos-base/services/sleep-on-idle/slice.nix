@@ -3,8 +3,10 @@
   lib,
   ...
 }:
-with lib; {
+with lib; let
+  enabled = filterAttrs (name: cfg: cfg.enable) config.myOpt.sleep-on-idle;
+in {
   systemd.slices =
     mapAttrs' (_: cfg: (nameValuePair cfg.sliceName {}))
-    (filterAttrs (_: cfg: cfg.sliceName != null) config.myOpt.sleep-on-idle);
+    enabled;
 }

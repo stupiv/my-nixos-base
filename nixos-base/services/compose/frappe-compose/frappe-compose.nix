@@ -59,9 +59,23 @@ in {
           type = types.bool;
           default = true;
         };
-        proxy-compose = mkOption {
+        modules = {
+          proxy-compose = mkOption {
+            type = types.anything;
+            default = {};
+          };
+        };
+        networkNamespace = mkOption {
           type = types.anything;
-          default = {};
+        };
+        sliceName = mkOption {
+          type = types.anything;
+          default = name;
+        };
+        cgroup-parent = mkOption {
+          type = types.anything;
+          default = "${sliceName}.slice";
+          readOnly = true;
         };
         frappe = {
           readOnlyMode = mkOption {
@@ -126,7 +140,7 @@ in {
             };
           };
           frontend = {
-            serviceName = mkOption {
+            containerName = mkOption {
               type = types.singleLineStr;
               default = "${name}-frontend";
               readOnly = true;
@@ -140,7 +154,7 @@ in {
             };
           };
           backend = {
-            serviceName = mkOption {
+            containerName = mkOption {
               type = types.singleLineStr;
               default = "${name}-backend";
               readOnly = true;
@@ -151,7 +165,7 @@ in {
               readOnly = true;
             };
           };
-          configurator.serviceName = mkOption {
+          configurator.containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-configurator";
             readOnly = true;
@@ -160,32 +174,32 @@ in {
             type = types.singleLineStr;
             default = "frontend";
           };
-          create-site.serviceName = mkOption {
+          create-site.containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-create-site";
             readOnly = true;
           };
-          migrate.serviceName = mkOption {
+          migrate.containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-migrate";
             readOnly = true;
           };
-          queue-long.serviceName = mkOption {
+          queue-long.containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-queue-long";
             readOnly = true;
           };
-          queue-short.serviceName = mkOption {
+          queue-short.containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-queue-short";
             readOnly = true;
           };
-          scheduler.serviceName = mkOption {
+          scheduler.containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-scheduler";
             readOnly = true;
           };
-          websocket.serviceName = mkOption {
+          websocket.containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-websocket";
             readOnly = true;
@@ -211,7 +225,7 @@ in {
             default = "${name}/mariadb_envfile";
             # MARIADB_ROOT_PASSWORD=
           };
-          serviceName = mkOption {
+          containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-mariadb";
             readOnly = true;
@@ -232,7 +246,7 @@ in {
             example = "/var/lib/test/frappe_v16/valkey_v8";
           };
           cache = {
-            serviceName = mkOption {
+            containerName = mkOption {
               type = types.singleLineStr;
               default = "${name}-valkey-cache";
               readOnly = true;
@@ -249,7 +263,7 @@ in {
               default = "${cfg.valkey.stateDir}/queue_data";
               readOnly = true;
             };
-            serviceName = mkOption {
+            containerName = mkOption {
               type = types.singleLineStr;
               default = "${name}-valkey-queue";
               readOnly = true;
@@ -265,14 +279,9 @@ in {
     }));
   };
 
-  config = {
-    virtualisation.oci-containers.backend = mkIf (enabled != {}) "podman";
-    virtualisation.podman.defaultNetwork.settings.dns_enabled = mkIf (enabled != {}) true;
-    assertions = mkIf (enabled != {}) [
-      {
-        assertion = (config.virtualisation.oci-containers.backend == "podman") && config.virtualisation.podman.defaultNetwork.settings.dns_enabled;
-      }
-    ];
+  config = mkIf (enabled != {}) {
+    virtualisation.oci-containers.backend = "podman";
+    virtualisation.podman.defaultNetwork.settings.dns_enabled = true;
 
     sops.secrets = mkMerge (mapAttrsToList (
         name: cfg: {
@@ -283,32 +292,38 @@ in {
       enabled);
 
     myOpt.proxy-compose =
-      mapAttrs' (name: cfg: (nameValuePair cfg.frappe.frontend.serviceName (mkMerge [
-        cfg.proxy-compose
+      mapAttrs' (name: cfg: (nameValuePair name (mkMerge [
+        cfg.modules.proxy-compose
         {
-          localMode.port = mkDefault 14144;
-          sleep-on-idle = {
-            health-check.path = "/api/method/ping";
-            endpoints.default.origin = {
-              inherit (cfg.frappe.frontend) port host;
-            };
-            dependsOn =
-              (with cfg; [
-                mariadb.serviceName
-                valkey.cache.serviceName
-                valkey.queue.serviceName
-              ])
-              ++ (with cfg.frappe; [
+          enable = true;
+          modules = {
+            sleep-on-idle = {
+              inherit (cfg) sliceName;
+              health-check.path = "/api/method/ping";
+              endpoints.default.origin = {
+                inherit (cfg.frappe.frontend) port host;
+              };
+              sleep.systemd-services = with cfg.frappe; [
                 build.serviceName
-                configurator.serviceName
-                create-site.serviceName
-                migrate.serviceName
-                queue-long.serviceName
-                queue-short.serviceName
-                scheduler.serviceName
-                backend.serviceName
-                websocket.serviceName
-              ]);
+              ];
+              sleep.oci-containers =
+                (with cfg; [
+                  mariadb.containerName
+                  valkey.cache.containerName
+                  valkey.queue.containerName
+                ])
+                ++ (with cfg.frappe; [
+                  frontend.containerName
+                  configurator.containerName
+                  create-site.containerName
+                  migrate.containerName
+                  queue-long.containerName
+                  queue-short.containerName
+                  scheduler.containerName
+                  backend.containerName
+                  websocket.containerName
+                ]);
+            };
           };
         }
       ])))
@@ -329,12 +344,7 @@ in {
     systemd.services = mkMerge (mapAttrsToList (name: cfg: (let
         CONFIGURATOR = "${cfg.frappe.configurator.serviceName}.service";
       in {
-        # ${cfg.frappe.migrate.serviceName}.serviceConfig.RemainAfterExit = true;
-        # ${cfg.frappe.configurator.serviceName}.serviceConfig.RemainAfterExit = true;
-        # ${cfg.frappe.create-site.serviceName}.serviceConfig.RemainAfterExit = true;
-
         ${cfg.frappe.build.serviceName} = {
-          # wantedBy = ["multi-user.target"];
           wants = ["network-online.target"];
           after = ["network-online.target"];
           requiredBy = [CONFIGURATOR];
@@ -384,23 +394,17 @@ in {
             ];
           };
         in {
-          ${cfg.mariadb.serviceName} = {
+          ${cfg.mariadb.containerName} = {
             inherit autoStart;
             inherit (cfg.mariadb) serviceName image;
             environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
-            environment.MARIADB_AUTO_UPGRADE = "1";
-            cmd = [
-              "--character-set-server=utf8mb4"
-              "--collation-server=utf8mb4_unicode_ci"
-              "--skip-character-set-client-handshake"
-            ];
             volumes = [
               "${cfg.mariadb.stateDir}:${in-container-mariadb-data-dir}"
               "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}"
             ];
           };
 
-          ${cfg.valkey.cache.serviceName} = mkMerge [
+          ${cfg.valkey.cache.containerName} = mkMerge [
             valkey_base
             {
               inherit (cfg.valkey.cache) serviceName;
@@ -415,7 +419,7 @@ in {
             }
           ];
 
-          ${cfg.valkey.queue.serviceName} = mkMerge [
+          ${cfg.valkey.queue.containerName} = mkMerge [
             valkey_base
             {
               inherit (cfg.valkey.queue) serviceName;
@@ -431,11 +435,11 @@ in {
             }
           ];
 
-          ${cfg.frappe.create-site.serviceName} = mkMerge [
+          ${cfg.frappe.create-site.containerName} = mkMerge [
             frappe_base
             {
               inherit (cfg.frappe.create-site) serviceName;
-              dependsOn = [cfg.frappe.configurator.serviceName];
+              dependsOn = [cfg.frappe.configurator.containerName];
               entrypoint = "bash";
               environment = {
                 SITE = cfg.frappe.siteName;
@@ -452,14 +456,14 @@ in {
             }
           ];
 
-          ${cfg.frappe.migrate.serviceName} = let
+          ${cfg.frappe.migrate.containerName} = let
             enabledApps = attrNames (filterAttrs (_: appCfg: appCfg.enable) cfg.frappe.apps);
           in
             mkMerge [
               frappe_base
               {
                 inherit (cfg.frappe.migrate) serviceName;
-                dependsOn = [cfg.frappe.create-site.serviceName];
+                dependsOn = [cfg.frappe.create-site.containerName];
                 entrypoint = "bash";
                 environment = {
                   SITE = cfg.frappe.siteName;
@@ -474,18 +478,18 @@ in {
               }
             ];
 
-          ${cfg.frappe.configurator.serviceName} = mkMerge [
+          ${cfg.frappe.configurator.containerName} = mkMerge [
             frappe_base
             {
               inherit (cfg.frappe.configurator) serviceName;
               dependsOn = [
-                cfg.mariadb.serviceName
-                cfg.valkey.cache.serviceName
-                cfg.valkey.queue.serviceName
+                cfg.mariadb.containerName
+                cfg.valkey.cache.containerName
+                cfg.valkey.queue.containerName
               ];
               entrypoint = "bash";
               environment = {
-                MARIADB_SERVICE = cfg.mariadb.serviceName;
+                MARIADB_SERVICE = cfg.mariadb.containerName;
                 MARIADB_SOCKET = mariadb-socket;
                 VALKEY_CACHE_SOCKET = valkey-cache-socket;
                 VALKEY_QUEUE_SOCKET = valkey-queue-socket;
@@ -504,11 +508,11 @@ in {
             }
           ];
 
-          ${cfg.frappe.backend.serviceName} = mkMerge [
+          ${cfg.frappe.backend.containerName} = mkMerge [
             frappe_base
             {
               inherit (cfg.frappe.backend) serviceName;
-              dependsOn = [cfg.frappe.migrate.serviceName];
+              dependsOn = [cfg.frappe.migrate.containerName];
               cmd = [
                 "/home/frappe/frappe-bench/env/bin/gunicorn"
                 "--chdir=${in-container-sites-dir}"
@@ -526,55 +530,55 @@ in {
             }
           ];
 
-          ${cfg.frappe.queue-long.serviceName} = mkMerge [
+          ${cfg.frappe.queue-long.containerName} = mkMerge [
             frappe_base
             {
               inherit (cfg.frappe.queue-long) serviceName;
-              dependsOn = [cfg.frappe.migrate.serviceName];
+              dependsOn = [cfg.frappe.migrate.containerName];
               cmd = ["bench" "worker" "--queue" "long,default,short"];
             }
           ];
 
-          ${cfg.frappe.queue-short.serviceName} = mkMerge [
+          ${cfg.frappe.queue-short.containerName} = mkMerge [
             frappe_base
             {
               inherit (cfg.frappe.queue-short) serviceName;
-              dependsOn = [cfg.frappe.migrate.serviceName];
+              dependsOn = [cfg.frappe.migrate.containerName];
               cmd = ["bench" "worker" "--queue" "short,default"];
             }
           ];
 
-          ${cfg.frappe.scheduler.serviceName} = mkMerge [
+          ${cfg.frappe.scheduler.containerName} = mkMerge [
             frappe_base
             {
               inherit (cfg.frappe.scheduler) serviceName;
-              dependsOn = [cfg.frappe.migrate.serviceName];
+              dependsOn = [cfg.frappe.migrate.containerName];
               cmd = ["bench" "schedule"];
             }
           ];
 
-          ${cfg.frappe.websocket.serviceName} = mkMerge [
+          ${cfg.frappe.websocket.containerName} = mkMerge [
             frappe_base
             {
               inherit (cfg.frappe.websocket) serviceName;
-              dependsOn = [cfg.frappe.migrate.serviceName];
+              dependsOn = [cfg.frappe.migrate.containerName];
               cmd = ["node" "/home/frappe/frappe-bench/apps/frappe/socketio.js"];
             }
           ];
 
-          ${cfg.frappe.frontend.serviceName} = mkMerge [
+          ${cfg.frappe.frontend.containerName} = mkMerge [
             frappe_base
             {
               inherit (cfg.frappe.frontend) serviceName;
               dependsOn = [
-                cfg.frappe.backend.serviceName
-                cfg.frappe.websocket.serviceName
+                cfg.frappe.backend.containerName
+                cfg.frappe.websocket.containerName
               ];
               cmd = ["nginx-entrypoint.sh"];
               environment = {
                 BACKEND = "unix:${frappe-socket}";
                 FRAPPE_SITE_NAME_HEADER = cfg.frappe.siteName;
-                SOCKETIO = "${cfg.frappe.websocket.serviceName}:${socketio_port}";
+                SOCKETIO = "${cfg.frappe.websocket.containerName}:${socketio_port}";
                 UPSTREAM_REAL_IP_ADDRESS = "127.0.0.1";
                 UPSTREAM_REAL_IP_HEADER = "X-Forwarded-For";
                 UPSTREAM_REAL_IP_RECURSIVE = "off";

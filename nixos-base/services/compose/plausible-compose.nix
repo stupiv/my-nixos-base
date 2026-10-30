@@ -1,11 +1,10 @@
-# - [ ] systemd/oci hardening
 {
   config,
   lib,
   ...
 }:
 with lib; let
-  enabled-plausible-compose = filterAttrs (_: cfg: cfg.enable) config.myOpt.plausible-compose;
+  enabled = filterAttrs (_: cfg: cfg.enable) config.myOpt.plausible-compose;
 in {
   options.myOpt.plausible-compose = mkOption {
     default = {};
@@ -17,9 +16,11 @@ in {
           type = types.bool;
           default = true;
         };
-        proxy-compose = mkOption {
-          type = types.anything;
-          default = {};
+        modules = {
+          proxy-compose = mkOption {
+            type = types.anything;
+            default = {};
+          };
         };
         serviceName = mkOption {
           type = types.singleLineStr;
@@ -73,27 +74,29 @@ in {
   config = {
     sops.secrets =
       mapAttrs' (name: cfg: (nameValuePair cfg.secretKeybaseFile-key (mkForce {})))
-      enabled-plausible-compose;
+      enabled;
 
     myOpt.proxy-compose = mkMerge (mapAttrsToList (
         name: cfg: (let
           containerCfg = config.containers.${name}.config;
         in {
-          ${cfg.serviceName} = mkMerge [
-            cfg.proxy-compose
+          ${name} = mkMerge [
+            cfg.modules.proxy-compose
             {
-              localMode.port = mkDefault 19811;
-              sleep-on-idle = {
+              enable = true;
+              modules.sleep-on-idle = {
                 health-check.path = "/api/system/health/ready";
                 endpoints.default = {
                   origin.port = containerCfg.services.plausible.server.port;
                 };
+                sleep.systemd-services = [cfg.serviceName];
+                sleep.oci-containers = [];
               };
             }
           ];
         })
       )
-      enabled-plausible-compose);
+      enabled);
 
     containers = mkMerge (mapAttrsToList (
         name: cfg: (let
@@ -101,6 +104,7 @@ in {
           outerCfg = config;
         in {
           ${name} = {
+            ephemeral = true;
             bindMounts = {
               "/var/lib/private/plausible" = {
                 # plausible systemd is using DynamicUser;
@@ -151,7 +155,7 @@ in {
           };
         })
       )
-      enabled-plausible-compose);
+      enabled);
 
     systemd.tmpfiles.rules = flatten (
       mapAttrsToList (name: cfg: [
@@ -159,7 +163,7 @@ in {
         "d '${cfg.clickhouse.stateDir}' - - - - -"
         "d '${cfg.postgresql.stateDir}' - - - - -"
       ])
-      enabled-plausible-compose
+      enabled
     );
   };
 }

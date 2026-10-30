@@ -5,23 +5,24 @@
   ...
 }:
 with lib; let
+  enabled = filterAttrs (name: cfg: cfg.enable) config.myOpt.sleep-on-idle;
   inherit (pkgs) writeShellScriptBin;
   systemctl = "${config.systemd.package}/bin/systemctl";
 in {
   systemd.services =
     mapAttrs' (_: cfg: let
-      inherit (cfg) freezeName SLICE_or_SERVICE thawName;
+      inherit (cfg) freezeName sliceUnit thawName;
     in (nameValuePair freezeName {
       unitConfig.StopWhenUnneeded = true;
       serviceConfig = {
         RemainAfterExit = true;
         ExecStart = getExe (writeShellScriptBin thawName ''
-          ${systemctl} thaw ${SLICE_or_SERVICE} || true
+          ${systemctl} thaw ${sliceUnit} || true
         '');
         ExecStop = getExe (writeShellScriptBin freezeName ''
-          ${systemctl} freeze ${SLICE_or_SERVICE} || true
+          ${systemctl} freeze ${sliceUnit} || true
         '');
       };
     }))
-    config.myOpt.sleep-on-idle;
+    enabled;
 }

@@ -59,14 +59,15 @@ in {
 
   config = mkIf (enabled != {}) {
     myOpt.proxy-compose = mapAttrs' (name: cfg:
-      nameValuePair cfg.serviceName (mkMerge [
+      nameValuePair name (mkMerge [
         cfg.modules.proxy-compose
         {
           enable = true;
-          localMode.port = mkDefault 33553;
-          sleep-on-idle = {
+          modules.sleep-on-idle = {
             health-check.path = "/";
             endpoints.default.origin.ip-socket = outerCfg.myOpt.keycloak.${name}.unix-socket;
+            sleep.systemd-services = [cfg.serviceName];
+            sleep.oci-containers = [];
           };
         }
       ]))

@@ -1,15 +1,10 @@
-# - [ ] extraOptions = [ "--cgroup-parent=${sliceName}.slice" ];
-# - [ ] You froze the systemd services not the OCI containers.
-# - [ ] Use services.n8n. instead of OCI containers. (Backup and migration are required here.)
-# - [ ] enviroment variables NODES_EXCLUDE=[] N8N_NODES_INCLUDE N8N_ENABLE_EXECUTE_COMMAND ??
-# - [ ] systemd/oci hardening
 {
   config,
   lib,
   ...
 }:
 with lib; let
-  enabled-n8n-compose = filterAttrs (_: cfg: cfg.enable) config.myOpt.n8n-compose;
+  enabled = filterAttrs (_: cfg: cfg.enable) config.myOpt.n8n-compose;
   autoStart = false;
   outerCfg = config;
 
@@ -38,7 +33,7 @@ in {
           type = types.bool;
           default = true;
         };
-        proxy-compose = mkOption {
+        modules.proxy-compose = mkOption {
           type = types.anything;
           default = {};
         };
@@ -47,7 +42,7 @@ in {
           default = '''';
         };
         n8n = {
-          serviceName = mkOption {
+          containerName = mkOption {
             type = types.singleLineStr;
             default = "${name}-n8n";
             readOnly = true;
@@ -82,7 +77,7 @@ in {
         };
         default-caddy-origin-ip-socket = mkOption {
           type = types.singleLineStr;
-          default = outerCfg.myOpt.proxy-compose.${config.n8n.serviceName}.default-caddy-origin-ip-socket;
+          default = outerCfg.myOpt.proxy-compose.${config.n8n.containerName}.default-caddy-origin-ip-socket;
           readOnly = true;
         };
       };
@@ -90,37 +85,37 @@ in {
   };
 
   config = {
-    sops.secrets = mapAttrs' (tunnel-id: cfg: (nameValuePair cfg.n8n.envfile-key {})) (filterAttrs (_: cfg: (cfg.n8n.envfile-key != null)) enabled-n8n-compose);
+    sops.secrets = mapAttrs' (tunnel-id: cfg: (nameValuePair cfg.n8n.envfile-key {})) (filterAttrs (_: cfg: (cfg.n8n.envfile-key != null)) enabled);
 
     myOpt.proxy-compose =
-      mapAttrs' (name: cfg: (nameValuePair cfg.n8n.serviceName (mkMerge [
-        cfg.proxy-compose
+      mapAttrs' (name: cfg: (nameValuePair name (mkMerge [
+        cfg.modules.proxy-compose
         {
-          localMode.port = mkDefault 11761;
-          sleep-on-idle = {
+          enable = true;
+          modules.sleep-on-idle = {
             health-check.path = "/healthz/readiness";
-            endpoints.default.origin = {
-              inherit (cfg.n8n) host port;
-            };
+            endpoints.default.origin = {inherit (cfg.n8n) host port;};
+            sleep.systemd-services = [];
+            sleep.oci-containers = [cfg.n8n.containerName];
           };
           caddy = {
             inherit (cfg.caddy) extraConfig;
           };
         }
       ])))
-      enabled-n8n-compose;
+      enabled;
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
         "d ${cfg.n8n._home_node_dotn8n} 700 1000 1000 - -"
         "d ${cfg.n8n._home_node_dotn8n-files} 700 1000 1000 - -"
       ])
-      enabled-n8n-compose);
+      enabled);
 
     virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (
         name: cfg: let
-          inherit (config.myOpt.proxy-compose.${cfg.n8n.serviceName}) cloudflared;
+          inherit (config.myOpt.proxy-compose.${cfg.n8n.containerName}) cloudflared;
         in {
-          ${cfg.n8n.serviceName} = {
+          ${cfg.n8n.containerName} = {
             inherit autoStart;
             inherit (cfg.n8n) serviceName image;
             environmentFiles = optionals (cfg.n8n.envfile-key != null) [
@@ -150,6 +145,6 @@ in {
           };
         }
       )
-      enabled-n8n-compose);
+      enabled);
   };
 }

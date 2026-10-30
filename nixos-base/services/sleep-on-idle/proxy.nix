@@ -5,6 +5,7 @@
   ...
 }:
 with lib; let
+  enabled = filterAttrs (name: cfg: cfg.enable) config.myOpt.sleep-on-idle;
   inherit (pkgs) writeShellScriptBin;
   systemd-socket-proxyd = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd";
   sleep = "${pkgs.coreutils}/bin/sleep";
@@ -12,11 +13,8 @@ with lib; let
   cgi-fcgi = getExe pkgs.fcgi;
 in {
   systemd.services = concatMapAttrs (name1: cfg1: let
-    inherit (cfg1) serviceName thawName freezeName health-check exit-idle-time TimeoutStartSec;
-    SERVICE = "${serviceName}.service";
-    THAW = "${thawName}.service";
-    FREEZE = "${freezeName}.service";
-    ExecStartPre = getExe (writeShellScriptBin "${serviceName}-health-check" ''
+    inherit (cfg1) sliceName freezeUnit health-check exit-idle-time TimeoutStartSec;
+    ExecStartPre = getExe (writeShellScriptBin "${sliceName}-health-check" ''
       until ${
         if (hasPrefix "/" health-check.ip-socket)
         then
@@ -32,18 +30,15 @@ in {
     assert (health-check.ip-socket != null);
       (mapAttrs' (name2: cfg2: let
         inherit (cfg2) proxy origin;
-        SOCKET = "${proxy.name}.socket";
+        socketUnit = "${proxy.name}.socket";
       in (nameValuePair proxy.name {
-        requires = [SOCKET SERVICE THAW FREEZE];
-        after = [SOCKET SERVICE THAW FREEZE];
-        # requires = [SOCKET SERVICE FREEZE];
-        # after = [SOCKET SERVICE FREEZE];
-
+        requires = [socketUnit freezeUnit];
+        after = [socketUnit freezeUnit];
         serviceConfig = {
           inherit TimeoutStartSec ExecStartPre;
           ExecStart = "${systemd-socket-proxyd} --exit-idle-time=${toString exit-idle-time} ${origin.ip-socket}";
         };
       })))
       cfg1.endpoints)
-  config.myOpt.sleep-on-idle;
+  enabled;
 }

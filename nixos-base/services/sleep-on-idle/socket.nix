@@ -3,7 +3,9 @@
   lib,
   ...
 }:
-with lib; {
+with lib; let
+  enabled = filterAttrs (name: cfg: cfg.enable) config.myOpt.sleep-on-idle;
+in {
   systemd.sockets = concatMapAttrs (name1: cfg1:
     mapAttrs' (name2: cfg2: let
       inherit (cfg2) proxy;
@@ -16,5 +18,5 @@ with lib; {
       };
     }))
     cfg1.endpoints)
-  config.myOpt.sleep-on-idle;
+  enabled;
 }

@@ -6,7 +6,7 @@
 }:
 with lib; let
   outerCfg = config;
-  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.frappe-compose-v2;
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.frappe-compose;
   autoStart = false;
 
   in-container-bench-dir = "/home/frappe/frappe-bench";
@@ -49,7 +49,7 @@ with lib; let
   migrate-script = pkgs.writeScript "migrate.sh" (builtins.readFile ./migrate.sh);
   configurator-script = pkgs.writeScript "configurator.sh" (builtins.readFile ./configurator.sh);
 in {
-  options.myOpt.frappe-compose-v2 = mkOption {
+  options.myOpt.frappe-compose = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;
@@ -59,17 +59,9 @@ in {
           type = types.bool;
           default = true;
         };
-        modules = {
-          proxy-compose-v2 = mkOption {
-            type = types.anything;
-            default = {};
-          };
-        };
-        networkNamespace = mkOption {
+        proxy-compose = mkOption {
           type = types.anything;
-        };
-        cgroup-parent = mkOption {
-          type = types.anything;
+          default = {};
         };
         frappe = {
           readOnlyMode = mkOption {
@@ -107,7 +99,7 @@ in {
           };
           branch = mkOption {
             type = types.singleLineStr;
-            default = config.frappe.base.tag; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
+            default = cfg.frappe.base.tag; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
             readOnly = true;
           };
           base = {
@@ -117,7 +109,7 @@ in {
             };
             image = mkOption {
               type = types.singleLineStr;
-              default = "docker.io/frappe/base:${config.frappe.base.tag}";
+              default = "docker.io/frappe/base:${cfg.frappe.base.tag}";
               readOnly = true;
             };
           };
@@ -129,7 +121,7 @@ in {
             };
             tag = mkOption {
               type = types.singleLineStr;
-              default = config.frappe.apps.erpnext.branch; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
+              default = cfg.frappe.apps.erpnext.branch; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
               example = "v16.26.2";
             };
           };
@@ -254,7 +246,7 @@ in {
           queue = {
             stateDir = mkOption {
               type = types.singleLineStr;
-              default = "${config.valkey.stateDir}/queue_data";
+              default = "${cfg.valkey.stateDir}/queue_data";
               readOnly = true;
             };
             serviceName = mkOption {
@@ -290,34 +282,33 @@ in {
       )
       enabled);
 
-    myOpt.proxy-compose-v2 =
+    myOpt.proxy-compose =
       mapAttrs' (name: cfg: (nameValuePair cfg.frappe.frontend.serviceName (mkMerge [
-        cfg.modules.proxy-compose-v2
+        cfg.proxy-compose
         {
-          modules = {
-            sleep-on-idle-v2 = {
-              health-check.path = "/api/method/ping";
-              endpoints.default.origin = {
-                inherit (cfg.frappe.frontend) port host;
-              };
-              dependsOn =
-                (with cfg; [
-                  mariadb.serviceName
-                  valkey.cache.serviceName
-                  valkey.queue.serviceName
-                ])
-                ++ (with cfg.frappe; [
-                  build.serviceName
-                  configurator.serviceName
-                  create-site.serviceName
-                  migrate.serviceName
-                  queue-long.serviceName
-                  queue-short.serviceName
-                  scheduler.serviceName
-                  backend.serviceName
-                  websocket.serviceName
-                ]);
+          localMode.port = mkDefault 14144;
+          sleep-on-idle = {
+            health-check.path = "/api/method/ping";
+            endpoints.default.origin = {
+              inherit (cfg.frappe.frontend) port host;
             };
+            dependsOn =
+              (with cfg; [
+                mariadb.serviceName
+                valkey.cache.serviceName
+                valkey.queue.serviceName
+              ])
+              ++ (with cfg.frappe; [
+                build.serviceName
+                configurator.serviceName
+                create-site.serviceName
+                migrate.serviceName
+                queue-long.serviceName
+                queue-short.serviceName
+                scheduler.serviceName
+                backend.serviceName
+                websocket.serviceName
+              ]);
           };
         }
       ])))
@@ -397,12 +388,12 @@ in {
             inherit autoStart;
             inherit (cfg.mariadb) serviceName image;
             environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
-            # environment.MARIADB_AUTO_UPGRADE = "1";
-            # cmd = [
-            #   "--character-set-server=utf8mb4"
-            #   "--collation-server=utf8mb4_unicode_ci"
-            #   "--skip-character-set-client-handshake"
-            # ];
+            environment.MARIADB_AUTO_UPGRADE = "1";
+            cmd = [
+              "--character-set-server=utf8mb4"
+              "--collation-server=utf8mb4_unicode_ci"
+              "--skip-character-set-client-handshake"
+            ];
             volumes = [
               "${cfg.mariadb.stateDir}:${in-container-mariadb-data-dir}"
               "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}"

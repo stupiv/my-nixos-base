@@ -30,6 +30,12 @@ in {
             type = types.anything;
             default = {};
           };
+          sleep-on-idle = mkOption {
+            type = types.anything;
+          };
+        };
+        hostname = mkOption {
+          type = types.singleLineStr;
         };
         localMode = {
           enable = mkOption {
@@ -50,28 +56,6 @@ in {
             # default = myLib.bracketIpv6 "${cfg.localMode.host}:${toString cfg.localMode.port}";
           };
         };
-        serviceName = mkOption {
-          type = types.singleLineStr;
-          default = name;
-          readOnly = true;
-        };
-        containerName = mkOption {
-          type = types.nullOr types.singleLineStr;
-          default = let
-            matches = builtins.match "^container@(.*)" cfg.serviceName;
-          in
-            if matches != null
-            then builtins.head matches
-            else null;
-          readOnly = true;
-        };
-        sleep-on-idle = mkOption {
-          type = types.anything;
-        };
-        oci-containers = mkOption {
-          type = types.anything;
-          default = {};
-        };
         cloudflared = {
           enable = mkOption {
             type = types.bool;
@@ -82,9 +66,6 @@ in {
             type = types.strMatching "^\/run\/.+\/.+$";
             default = "/run/proxy-compose/${name}/${name}.sock";
           };
-        };
-        hostname = mkOption {
-          type = types.singleLineStr;
         };
         caddy = {
           extraConfig = mkOption {
@@ -97,7 +78,7 @@ in {
           };
           add-handle-reverse-proxy = mkOption {
             type = types.bool;
-            default = config.myOpt.sleep-on-idle.${cfg.serviceName}.endpoints ? default;
+            default = true;
           };
           request_body.max_size = mkOption {
             type = types.str;
@@ -105,14 +86,8 @@ in {
           };
         };
         default-caddy-origin-ip-socket = mkOption {
-          type = types.nullOr (types.strMatching "^[^\/].+$");
-          default = let
-            inherit (config.myOpt.sleep-on-idle.${name}) endpoints;
-          in (
-            if endpoints ? default
-            then to-caddy-ip-socket endpoints.default.proxy.ip-socket
-            else null
-          );
+          type = types.strMatching "^[^\/].+$";
+          default = to-caddy-ip-socket endpoints.default.proxy.ip-socket;
           readOnly = true;
         };
       };
@@ -121,21 +96,25 @@ in {
 
   config = {
     assertions = flatten (mapAttrsToList (name: cfg: let
-        inherit (cfg.caddy) add-handle-reverse-proxy;
-        inherit (config.myOpt.sleep-on-idle.${name}) endpoints;
         inherit (cfg) localMode cloudflared;
       in [
-        {
-          assertion = !(add-handle-reverse-proxy && !(endpoints ? default));
-        }
         {
           assertion = !(localMode.enable && cloudflared.enable);
         }
       ])
       enabled);
 
+    myOpt.sleep-on-idle =
+      mapAttrs' (name: cfg: (nameValuePair name (mkMerge [
+        cfg.modules.sleep-on-idle
+        {
+          enable = true;
+        }
+      ])))
+      enabled;
+
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${builtins.dirOf cfg.cloudflared.unix-socket} 777 - - - -"
+        "d ${builtins.dirOf cfg.cloudflared.unix-socket} 711 caddy caddy - -"
       ])
       enabled-cloudflared);
 
@@ -201,16 +180,5 @@ in {
         }
       )
       enabled);
-
-    myOpt.sleep-on-idle =
-      mapAttrs' (_: cfg: (nameValuePair cfg.serviceName cfg.sleep-on-idle))
-      enabled;
-
-    containers =
-      mapAttrs' (_: cfg: (nameValuePair cfg.containerName {
-        ephemeral = mkDefault true;
-        config.nixpkgs.pkgs = pkgs;
-      }))
-      (filterAttrs (_: cfg: cfg.containerName != null) enabled);
   };
 }
