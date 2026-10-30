@@ -60,7 +60,7 @@ in {
           default = true;
         };
         modules = {
-          proxy-compose = mkOption {
+          proxy-compose-v2 = mkOption {
             type = types.anything;
             default = {};
           };
@@ -290,13 +290,12 @@ in {
       )
       enabled);
 
-    myOpt.proxy-compose =
+    myOpt.proxy-compose-v2 =
       mapAttrs' (name: cfg: (nameValuePair cfg.frappe.frontend.serviceName (mkMerge [
-        cfg.modules.proxy-compose
+        cfg.modules.proxy-compose-v2
         {
-          localMode.port = mkDefault 14144;
           modules = {
-            sleep-on-idle = {
+            sleep-on-idle-v2 = {
               health-check.path = "/api/method/ping";
               endpoints.default.origin = {
                 inherit (cfg.frappe.frontend) port host;
