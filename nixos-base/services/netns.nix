@@ -22,7 +22,7 @@ in {
               default = true;
             };
             set-network-namespace = {
-              sytemd-services = mkOption {
+              systemd-services = mkOption {
                 type = types.listOf types.singleLineStr;
               };
               oci-containers = mkOption {
@@ -84,9 +84,9 @@ in {
         })))
         enabled)
       ++ (mapAttrsToList (_: cfg: (genAttrs (
-          (cfg.set-cgroup-parent.systemd-services)
-          ++ (map (containerName: "${outerCfg.virtualisation.oci-containers.${containerName}.serviceName}") cfg.set-cgroup-parent.oci-containers)
-          ++ (map (containerName: "container@${containerName}") cfg.set-cgroup-parent.nixos-containers)
+          (cfg.set-network-namespace.systemd-services)
+          ++ (map (containerName: "${outerCfg.virtualisation.oci-containers.${containerName}.serviceName}") cfg.set-network-namespace.oci-containers)
+          ++ (map (containerName: "container@${containerName}") cfg.set-network-namespace.nixos-containers)
         ) (_: {
           bindsTo = [cfg.serviceUnit];
           after = [cfg.serviceUnit];
@@ -94,7 +94,7 @@ in {
       enabled)
       ++ (mapAttrsToList (name: cfg: let
           ns = cfg.networkNamespace;
-          up = pkgs.writeShellScript "netns-${name}-up" ''
+          up = pkgs.writeShellScript "${cfg.serviceName}-up" ''
             set -eu
             if ${ip} netns list | ${pkgs.gnugrep}/bin/grep -qw '${ns}'; then
               ${ip} netns del '${ns}'
@@ -103,7 +103,7 @@ in {
             ${ip} -n '${ns}' link set lo up
           '';
         in {
-          ${serviceName} = {
+          ${cfg.serviceName} = {
             restartTriggers = [up];
             serviceConfig = {
               Type = "oneshot";
@@ -112,23 +112,18 @@ in {
               ExecStop = "-${ip} netns del '${ns}'";
 
               NoNewPrivileges = true;
-              PrivateTmp = true;
-              ProtectHome = true;
-              ProtectSystem = "yes";
-              CapabilityBoundingSet = [
-                "CAP_NET_ADMIN"
-                "CAP_NET_RAW"
-                "CAP_SYS_ADMIN"
-              ];
-              RestrictAddressFamilies = [
-                "AF_INET"
-                "AF_INET6"
-                "AF_NETLINK"
-                "AF_UNIX"
-              ];
+              CapabilityBoundingSet = ["CAP_NET_ADMIN" "CAP_SYS_ADMIN"];
+              RestrictNamespaces = "net";
+              RestrictAddressFamilies = ["AF_NETLINK" "AF_UNIX"];
+              IPAddressDeny = "any";
               LockPersonality = true;
               RestrictRealtime = true;
               RestrictSUIDSGID = true;
+              MemoryDenyWriteExecute = true;
+              SystemCallArchitectures = "native";
+              KeyringMode = "private";
+              RemoveIPC = true;
+              ProtectClock = true;
               UMask = "0077";
             };
           };
