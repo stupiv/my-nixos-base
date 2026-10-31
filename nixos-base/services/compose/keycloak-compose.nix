@@ -138,6 +138,7 @@ in {
           privateNetwork = true;
           privateUsers = "pick";
           autoStart = false;
+          nixpkgs.pkgs = pkgs;
           extraFlags = [
             "--bind=${cfg.container.stateDir}:${cfg.container.stateDir}:idmap"
             "--bind=${cfg.container.shared-run-dir}:${cfg.container.shared-run-dir}:rootidmap"

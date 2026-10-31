@@ -19,6 +19,7 @@ in {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;
+      sleep-on-idle-cfg = outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id};
     in {
       options = {
         enable = mkOption {
@@ -85,9 +86,18 @@ in {
             default = "16MiB";
           };
         };
+        sleep-on-idle-id = mkOption {
+          type = types.anything;
+          default = name;
+        };
         default-caddy-origin-ip-socket = mkOption {
           type = types.strMatching "^[^\/].+$";
-          default = to-caddy-ip-socket endpoints.default.proxy.ip-socket;
+          default = to-caddy-ip-socket sleep-on-idle-cfg.endpoints.default.proxy.ip-socket;
+          readOnly = true;
+        };
+        cgroup-parent = mkOption {
+          type = types.anything;
+          default = sleep-on-idle-cfg.cgroup-parent;
           readOnly = true;
         };
       };
@@ -105,7 +115,7 @@ in {
       enabled);
 
     myOpt.sleep-on-idle =
-      mapAttrs' (name: cfg: (nameValuePair name (mkMerge [
+      mapAttrs' (name: cfg: (nameValuePair cfg.sleep-on-idle-id (mkMerge [
         cfg.modules.sleep-on-idle
         {
           enable = true;

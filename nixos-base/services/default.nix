@@ -2,13 +2,19 @@
   imports = [
     ./compose
     ./sleep-on-idle
-    ./WIP
+    ./camofox.nix
     ./cloudflared.nix
     # ./default.nix
+    ./fastcrw.nix
     ./keycloak.nix
+    ./litellm.nix
+    ./mariadb.nix
+    ./netns.nix
     ./postgresql.nix
     ./proxy-compose.nix
     ./rclone-automount.nix
+    ./searxng.nix
     ./systemd-socket-proxyd.nix
+    ./valkey.nix
   ];
 }

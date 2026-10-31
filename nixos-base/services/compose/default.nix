@@ -2,10 +2,9 @@
   imports = [
     ./frappe-compose
     # ./unmaintained
-    ./WIP
     # ./default.nix
+    ./hermes-agent-compose.nix
     ./keycloak-compose.nix
     ./n8n-compose.nix
-    ./plausible-compose.nix
   ];
 }

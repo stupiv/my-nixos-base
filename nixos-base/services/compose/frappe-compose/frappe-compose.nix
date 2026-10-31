@@ -43,7 +43,6 @@ with lib; let
     text = builtins.readFile ./frappe-bench-store.sh;
   });
 
-  # bench-init.sh runs inside the frappe/build container. Made a store path
   bench-init-script = pkgs.writeScript "bench-init.sh" (builtins.readFile ./bench-init.sh);
   create-site-script = pkgs.writeScript "create-site.sh" (builtins.readFile ./create-site.sh);
   migrate-script = pkgs.writeScript "migrate.sh" (builtins.readFile ./migrate.sh);
@@ -68,13 +67,13 @@ in {
         networkNamespace = mkOption {
           type = types.anything;
         };
-        sliceName = mkOption {
+        proxy-compose-id = mkOption {
           type = types.anything;
           default = name;
         };
         cgroup-parent = mkOption {
           type = types.anything;
-          default = "${sliceName}.slice";
+          default = outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.cgroup-parent;
           readOnly = true;
         };
         frappe = {
@@ -292,13 +291,12 @@ in {
       enabled);
 
     myOpt.proxy-compose =
-      mapAttrs' (name: cfg: (nameValuePair name (mkMerge [
+      mapAttrs' (name: cfg: (nameValuePair cfg.proxy-compose-id (mkMerge [
         cfg.modules.proxy-compose
         {
           enable = true;
           modules = {
             sleep-on-idle = {
-              inherit (cfg) sliceName;
               health-check.path = "/api/method/ping";
               endpoints.default.origin = {
                 inherit (cfg.frappe.frontend) port host;
@@ -398,6 +396,11 @@ in {
             inherit autoStart;
             inherit (cfg.mariadb) serviceName image;
             environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
+            cmd = [
+              "--character-set-server=utf8mb4"
+              "--collation-server=utf8mb4_unicode_ci"
+              "--skip-character-set-client-handshake"
+            ];
             volumes = [
               "${cfg.mariadb.stateDir}:${in-container-mariadb-data-dir}"
               "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}"

@@ -5,7 +5,6 @@
 }:
 with lib; let
   enabled = filterAttrs (_: cfg: cfg.enable) config.myOpt.n8n-compose;
-  autoStart = false;
   outerCfg = config;
 
   in-container_home_node_dotn8n = "/home/node/.n8n";
@@ -116,7 +115,7 @@ in {
           inherit (config.myOpt.proxy-compose.${cfg.n8n.containerName}) cloudflared;
         in {
           ${cfg.n8n.containerName} = {
-            inherit autoStart;
+            autoStart = false;
             inherit (cfg.n8n) serviceName image;
             environmentFiles = optionals (cfg.n8n.envfile-key != null) [
               config.sops.secrets.${cfg.n8n.envfile-key}.path
