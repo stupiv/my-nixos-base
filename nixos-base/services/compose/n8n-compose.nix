@@ -94,8 +94,8 @@ in {
           modules.sleep-on-idle = {
             health-check.path = "/healthz/readiness";
             endpoints.default.origin = {inherit (cfg.n8n) host port;};
-            sleep.systemd-services = [];
-            sleep.oci-containers = [cfg.n8n.containerName];
+            set-cgroup-parent.systemd-services = [];
+            set-cgroup-parent.oci-containers = [cfg.n8n.containerName];
           };
           caddy = {
             inherit (cfg.caddy) extraConfig;

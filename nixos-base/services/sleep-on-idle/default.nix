@@ -4,7 +4,7 @@
     ./freeze.nix
     ./options.nix
     ./proxy.nix
-    ./sleep.nix
+    ./set-cgroup-parent.nix
     ./slice.nix
     ./socket.nix
   ];

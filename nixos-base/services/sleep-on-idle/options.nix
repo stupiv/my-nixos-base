@@ -25,7 +25,7 @@ in {
           default = "${cfg.sliceName}.slice";
           readOnly = true;
         };
-        sleep = {
+        set-cgroup-parent = {
           sytemd-services = mkOption {
             type = types.listOf types.singleLineStr;
           };

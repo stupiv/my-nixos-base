@@ -301,10 +301,10 @@ in {
               endpoints.default.origin = {
                 inherit (cfg.frappe.frontend) port host;
               };
-              sleep.systemd-services = with cfg.frappe; [
+              set-cgroup-parent.systemd-services = with cfg.frappe; [
                 build.serviceName
               ];
-              sleep.oci-containers =
+              set-cgroup-parent.oci-containers =
                 (with cfg; [
                   mariadb.containerName
                   valkey.cache.containerName

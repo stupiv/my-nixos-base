@@ -89,8 +89,8 @@ in {
                 endpoints.default = {
                   origin.port = containerCfg.services.plausible.server.port;
                 };
-                sleep.systemd-services = [cfg.serviceName];
-                sleep.oci-containers = [];
+                set-cgroup-parent.systemd-services = [cfg.serviceName];
+                set-cgroup-parent.oci-containers = [];
               };
             }
           ];

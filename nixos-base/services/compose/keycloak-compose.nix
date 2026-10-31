@@ -66,8 +66,8 @@ in {
           modules.sleep-on-idle = {
             health-check.path = "/";
             endpoints.default.origin.ip-socket = outerCfg.myOpt.keycloak.${name}.unix-socket;
-            sleep.systemd-services = [cfg.serviceName];
-            sleep.oci-containers = [];
+            set-cgroup-parent.systemd-services = [cfg.serviceName];
+            set-cgroup-parent.oci-containers = [];
           };
         }
       ]))
