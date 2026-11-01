@@ -17,6 +17,10 @@ in {
           type = types.bool;
           default = true;
         };
+        modules.services.postgresql = mkOption {
+          type = types.anything;
+          default = {};
+        };
         container = mkOption {
           type = types.anything;
           default = {};
@@ -26,31 +30,25 @@ in {
           default = "${cfg.container.stateDir}/postgresql";
           readOnly = true;
         };
-        postgresql = mkOption {
-          type = types.anything;
-          default = {};
-        };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
     containers = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.container.name} = {
-          config = {...}: {
-            systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-                "d '${cfg.stateDir}' 0700 postgres postgres - -"
-              ])
-              enabled);
-            services.postgresql = mkMerge [
-              cfg.postgresql
-              {
-                enable = true;
-                package = mkDefault cfg.postgresql.package;
-                dataDir = cfg.stateDir;
-              }
-            ];
-          };
+        ${cfg.container.name}.config = {...}: {
+          systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
+              "d '${cfg.stateDir}' 0700 postgres postgres - -"
+            ])
+            enabled);
+          services.postgresql = mkMerge [
+            cfg.modules.services.postgresql
+            {
+              enable = true;
+              package = mkDefault cfg.modules.services.postgresql.package;
+              dataDir = cfg.stateDir;
+            }
+          ];
         };
       })
       enabled);

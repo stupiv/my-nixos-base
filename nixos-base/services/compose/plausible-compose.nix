@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
@@ -105,6 +106,8 @@ in {
         in {
           ${name} = {
             ephemeral = true;
+            autoStart = false;
+            config.nixpkgs.pkgs = pkgs;
             bindMounts = {
               "/var/lib/private/plausible" = {
                 # plausible systemd is using DynamicUser;

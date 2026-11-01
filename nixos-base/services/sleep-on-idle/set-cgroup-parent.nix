@@ -9,7 +9,7 @@ with lib; let
 in {
   systemd.services = mkMerge (mapAttrsToList (_: cfg: (genAttrs (
       cfg.set-cgroup-parent.systemd-services
-      ++ (map (containerName: outerCfg.virtualisation.oci-containers.${containerName}.serviceName) cfg.set-cgroup-parent.oci-containers)
+      ++ (map (containerName: outerCfg.virtualisation.oci-containers.containers.${containerName}.serviceName) cfg.set-cgroup-parent.oci-containers)
     ) (_: {
       wantedBy = mkForce ["${cfg.freezeUnit}"];
       after = ["${cfg.freezeUnit}"];
@@ -22,7 +22,7 @@ in {
       };
     })))
   enabled);
-  virtualisation.oci-containers = mkMerge (mapAttrsToList (_: cfg: (genAttrs cfg.set-cgroup-parent.oci-containers (_: {
+  virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (_: cfg: (genAttrs cfg.set-cgroup-parent.oci-containers (_: {
       extraOptions = ["--cgroup-parent=${cfg.sliceUnit}"];
     })))
     enabled);

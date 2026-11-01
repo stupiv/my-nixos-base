@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
@@ -53,13 +54,17 @@ in {
           type = types.port;
           default = 15447;
         };
+        proxy-compose-id = mkOption {
+          type = types.singleLineStr;
+          default = name;
+        };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
     myOpt.proxy-compose = mapAttrs' (name: cfg:
-      nameValuePair name (mkMerge [
+      nameValuePair cfg.proxy-compose-id (mkMerge [
         cfg.modules.proxy-compose
         {
           enable = true;
@@ -74,15 +79,15 @@ in {
     enabled;
 
     myOpt.keycloak = mapAttrs' (name: cfg: let
-      inherit (outerCfg.myOpt.proxy-compose.${cfg.serviceName}) localMode hostname;
+      inherit (outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}) localMode hostname;
     in
       nameValuePair name (mkMerge [
         cfg.modules.keycloak
         {
           inherit (cfg) container;
           enable = true;
-          keycloak = {
-            plugins = with cfg.modules.keycloak.keycloak.package.plugins; [
+          modules.services.keycloak = {
+            plugins = with cfg.modules.keycloak.modules.services.keycloak.package.plugins; [
               junixsocket-common
               junixsocket-native-common
             ];
@@ -110,7 +115,7 @@ in {
         {
           inherit (cfg) container;
           enable = true;
-          postgresql = {
+          modules.services.postgresql = {
             settings = {
               inherit (cfg.database) port;
             };
@@ -135,10 +140,10 @@ in {
     containers = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.container.name} = {
           ephemeral = true;
+          autoStart = false;
+          config.nixpkgs.pkgs = pkgs;
           privateNetwork = true;
           privateUsers = "pick";
-          autoStart = false;
-          nixpkgs.pkgs = pkgs;
           extraFlags = [
             "--bind=${cfg.container.stateDir}:${cfg.container.stateDir}:idmap"
             "--bind=${cfg.container.shared-run-dir}:${cfg.container.shared-run-dir}:rootidmap"

@@ -26,7 +26,7 @@ in {
           readOnly = true;
         };
         set-cgroup-parent = {
-          sytemd-services = mkOption {
+          systemd-services = mkOption {
             type = types.listOf types.singleLineStr;
           };
           oci-containers = mkOption {
@@ -38,12 +38,12 @@ in {
           type = types.attrsOf (types.submodule ({name, ...} @ endPointArgs: {
             options = {
               origin = mkEndpointOpt {
-                cfg = config.origin;
+                cfg = endPointArgs.config.origin;
                 ipv6-brackets = false; # proxyd dial target: no brackets
               };
               proxy =
                 (mkEndpointOpt {
-                  cfg = config.proxy;
+                  cfg = endPointArgs.config.proxy;
                   default-ip-socket = "/run/sleep-on-idle/${cfg.sliceName}/${endPointArgs.name}.sock";
                   ipv6-brackets = true; # ListenStream=: brackets required
                 })

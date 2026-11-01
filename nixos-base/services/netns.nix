@@ -113,7 +113,6 @@ in {
 
               NoNewPrivileges = true;
               CapabilityBoundingSet = ["CAP_NET_ADMIN" "CAP_SYS_ADMIN"];
-              RestrictNamespaces = "net";
               RestrictAddressFamilies = ["AF_NETLINK" "AF_UNIX"];
               IPAddressDeny = "any";
               LockPersonality = true;
