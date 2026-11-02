@@ -67,7 +67,7 @@ in {
     virtualisation.oci-containers = mkMerge (
       mapAttrsToList (
         _: cfg: (genAttrs cfg.set-network-namespace.oci-containers (_: {
-          extraOptions = ["--network=ns:${cfg.NetworkNamespacePath}"];
+          networks = ["ns:${cfg.NetworkNamespacePath}"];
         }))
       )
       enabled
