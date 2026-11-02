@@ -8,18 +8,10 @@
 with lib; let
   inherit (pkgs.myLib) mkEndpointOpt;
   enabled = filterAttrs (_: cfg: cfg.enable) config.myOpt.systemd-socket-proxyd;
-  # custom-mkEndpointOpt = args: ((mkEndpointOpt args)
-  #   // {
-  #     serviceName = mkOption {
-  #       type = types.nullOr types.singleLineStr;
-  #       default = args.serviceName;
-  #     };
-  #   });
 in {
   imports = [
     ../../myLib
   ];
-
   options.myOpt.systemd-socket-proxyd = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({
