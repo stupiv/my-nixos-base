@@ -166,6 +166,7 @@ in {
             autoStart = false;
             inherit (cfg.frappe.base) image;
             environmentFiles = [config.sops.secrets.${cfg.frappe.envfile-key}.path];
+            user = "frappe";
             workdir = in-container-bench-dir;
             extraOptions = ["--tmpfs" "${in-container-bench-dir}/config:rw,mode=0770,U"];
             volumes = [
