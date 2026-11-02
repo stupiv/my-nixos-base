@@ -7,7 +7,7 @@
 with lib; let
   outerCfg = config;
 in {
-  options.myOpt.frappe-compose = mkOption {
+  options.myOpt.frappe-v16-compose = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;

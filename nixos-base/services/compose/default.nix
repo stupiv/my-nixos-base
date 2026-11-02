@@ -1,6 +1,6 @@
 {
   imports = [
-    ./frappe-compose
+    ./frappe-v16-compose
     # ./unmaintained
     # ./default.nix
     ./hermes-agent-compose.nix

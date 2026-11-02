@@ -6,10 +6,13 @@
 }:
 with lib; let
   outerCfg = config;
-  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.frappe-compose;
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.frappe-v16-compose;
+  autoStart = false;
 
   in-container-bench-dir = "/home/frappe/frappe-bench";
-  assets-path = "/sites/assets";
+  sites-path = "/sites";
+  logs-path = "/logs";
+  assets-path = "${sites-path}/assets";
   in-container-mariadb-data-dir = "/var/lib/mysql";
   in-container-valkey-data-dir = "/data";
   in-container-frappe-socket-folder = "/run/frappe";
@@ -21,8 +24,8 @@ with lib; let
   frappe-socket-name = "gunicorn.sock";
   socketio_port = "9000";
 
-  in-container-sites-dir = "${in-container-bench-dir}/sites";
-  in-container-logs-dir = "${in-container-bench-dir}/logs";
+  in-container-sites-dir = "${in-container-bench-dir}${sites-path}";
+  in-container-logs-dir = "${in-container-bench-dir}${logs-path}";
   mariadb-socket = "${in-container-mariadb-socket-folder}/${mariadb-socket-name}";
   valkey-cache-socket = "${in-container-valkey-cache-socket-folder}/${valkey-socket-name}";
   valkey-queue-socket = "${in-container-valkey-queue-socket-folder}/${valkey-socket-name}";
@@ -45,6 +48,225 @@ with lib; let
   migrate-script = pkgs.writeScript "migrate.sh" (builtins.readFile ./migrate.sh);
   configurator-script = pkgs.writeScript "configurator.sh" (builtins.readFile ./configurator.sh);
 in {
+  options.myOpt.frappe-v16-compose = mkOption {
+    default = {};
+    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
+      cfg = innerArgs.config;
+    in {
+      options = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+        modules = {
+          proxy-compose = mkOption {
+            type = types.anything;
+            default = {};
+          };
+        };
+        networkNamespace = mkOption {
+          type = types.anything;
+        };
+        proxy-compose-id = mkOption {
+          type = types.anything;
+          default = name;
+        };
+        cgroup-parent = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.cgroup-parent;
+          readOnly = true;
+        };
+        frappe = {
+          readOnlyMode = mkOption {
+            type = types.bool;
+            default = false;
+          };
+          sitesDir = mkOption {
+            type = types.singleLineStr;
+            example = "/var/lib/test/frappe_v16/frappe_v16${sites-path}";
+          };
+          logsDir = mkOption {
+            type = types.singleLineStr;
+            example = "/var/lib/test/frappe_v16/frappe_v16${logs-path}";
+          };
+          benchDir = mkOption {
+            type = types.singleLineStr;
+            example = "/var/lib/test/frappe_v16/frappe_v16/frappe-bench";
+          };
+          apps = mkOption {
+            type = types.attrsOf (types.submodule ({name, ...}: {
+              options = {
+                enable = mkOption {
+                  type = types.bool;
+                  default = true;
+                };
+                url = mkOption {
+                  type = types.singleLineStr;
+                  default = "https://github.com/frappe/${name}";
+                };
+                branch = mkOption {
+                  type = types.singleLineStr;
+                };
+              };
+            }));
+          };
+          branch = mkOption {
+            type = types.singleLineStr;
+            default = cfg.frappe.base.tag; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
+            readOnly = true;
+          };
+          base = {
+            tag = mkOption {
+              type = types.singleLineStr;
+              example = "v16.25.0";
+            };
+            image = mkOption {
+              type = types.singleLineStr;
+              default = "docker.io/frappe/base:${cfg.frappe.base.tag}";
+              readOnly = true;
+            };
+          };
+          build = {
+            serviceName = mkOption {
+              type = types.singleLineStr;
+              default = "${name}-build";
+            };
+            tag = mkOption {
+              type = types.singleLineStr;
+              default = cfg.frappe.apps.erpnext.branch; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
+              example = "v16.26.2";
+            };
+          };
+          frontend = {
+            containerName = mkOption {
+              type = types.singleLineStr;
+              default = "${name}-frontend";
+            };
+            port = mkOption {
+              type = types.port;
+            };
+            host = mkOption {
+              type = types.singleLineStr;
+              default = "127.0.0.1";
+            };
+          };
+          backend = {
+            containerName = mkOption {
+              type = types.singleLineStr;
+              default = "${name}-backend";
+            };
+            socket-folder = mkOption {
+              type = types.singleLineStr;
+              default = "/run/${name}/backend";
+              readOnly = true;
+            };
+          };
+          configurator = {
+            containerName = mkOption {
+              type = types.singleLineStr;
+              default = "${name}-configurator";
+            };
+          };
+          siteName = mkOption {
+            type = types.singleLineStr;
+            default = "frontend";
+          };
+          create-site.containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-create-site";
+          };
+          migrate.containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-migrate";
+          };
+          queue-long.containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-queue-long";
+          };
+          queue-short.containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-queue-short";
+          };
+          scheduler.containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-scheduler";
+          };
+          websocket.containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-websocket";
+          };
+          envfile-key = mkOption {
+            type = types.singleLineStr;
+            default = "${name}/frappe_envfile";
+            # INIT_ADMIN_PASSWORD=
+            # DB_PASSWORD=
+          };
+        };
+        mariadb = {
+          image = mkOption {
+            type = types.singleLineStr;
+            example = "docker.io/mariadb:11.8.8";
+          };
+          stateDir = mkOption {
+            type = types.singleLineStr;
+            example = "/var/lib/test/frappe_v16/mariadb_v12";
+          };
+          envfile-key = mkOption {
+            type = types.singleLineStr;
+            default = "${name}/mariadb_envfile";
+            # MARIADB_ROOT_PASSWORD=
+          };
+          containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-mariadb";
+          };
+          socket-folder = mkOption {
+            type = types.singleLineStr;
+            default = "/run/${name}/mariadb";
+            readOnly = true;
+          };
+        };
+        valkey = {
+          image = mkOption {
+            type = types.singleLineStr;
+            example = "docker.io/valkey/valkey:8.1.8-alpine";
+          };
+          stateDir = mkOption {
+            type = types.singleLineStr;
+            example = "/var/lib/test/frappe_v16/valkey_v8";
+          };
+          cache = {
+            containerName = mkOption {
+              type = types.singleLineStr;
+              default = "${name}-valkey-cache";
+            };
+            socket-folder = mkOption {
+              type = types.singleLineStr;
+              default = "/run/${name}/valkey-cache";
+              readOnly = true;
+            };
+          };
+          queue = {
+            stateDir = mkOption {
+              type = types.singleLineStr;
+              default = "${cfg.valkey.stateDir}/queue_data";
+              readOnly = true;
+            };
+            containerName = mkOption {
+              type = types.singleLineStr;
+              default = "${name}-valkey-queue";
+            };
+            socket-folder = mkOption {
+              type = types.singleLineStr;
+              default = "/run/${name}/valkey-queue";
+              readOnly = true;
+            };
+          };
+        };
+      };
+    }));
+  };
+
   config = mkIf (enabled != {}) {
     virtualisation.oci-containers.backend = "podman";
     virtualisation.podman.defaultNetwork.settings.dns_enabled = true;
@@ -137,11 +359,11 @@ in {
     virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (
         name: cfg: let
           valkey_base = {
-            autoStart = false;
+            inherit autoStart;
             inherit (cfg.valkey) image;
           };
           frappe_base = {
-            autoStart = false;
+            inherit autoStart;
             inherit (cfg.frappe.base) image;
             environmentFiles = [config.sops.secrets.${cfg.frappe.envfile-key}.path];
             user = "1000:1000";
@@ -160,7 +382,7 @@ in {
           };
         in {
           ${cfg.mariadb.containerName} = {
-            autoStart = false;
+            inherit autoStart;
             inherit (cfg.mariadb) image;
             environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
             cmd = [
