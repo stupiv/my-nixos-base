@@ -117,14 +117,14 @@ in {
       enabled;
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${cfg.frappe.sitesDir} 700 1000 1000 - -"
-        "d ${cfg.frappe.logsDir} 700 1000 1000 - -"
-        "d ${cfg.frappe.backend.socket-folder} 700 1000 1000 - -"
-        "d ${cfg.mariadb.stateDir} 700 999 999 - -"
-        "d ${cfg.mariadb.socket-folder} 777 - - - -" # Because we use passwords
-        "d ${cfg.valkey.queue.stateDir} 700 0 0 - -"
-        "d ${cfg.valkey.cache.socket-folder} 700 1000 1000 - -"
-        "d ${cfg.valkey.queue.socket-folder} 700 1000 1000 - -"
+        "d ${cfg.frappe.sitesDir} 0770 0 0 - -"
+        "d ${cfg.frappe.logsDir} 0770 0 0 - -"
+        "d ${cfg.frappe.backend.socket-folder} 0770 0 0 - -"
+        "d ${cfg.mariadb.stateDir} 0700 999 999 - -"
+        "d ${cfg.mariadb.socket-folder} 0777 - - - -"
+        "d ${cfg.valkey.queue.stateDir} 0700 0 0 - -"
+        "d ${cfg.valkey.cache.socket-folder} 0770 0 0 - -"
+        "d ${cfg.valkey.queue.socket-folder} 0770 0 0 - -"
       ])
       enabled);
 
@@ -166,9 +166,8 @@ in {
             autoStart = false;
             inherit (cfg.frappe.base) image;
             environmentFiles = [config.sops.secrets.${cfg.frappe.envfile-key}.path];
-            user = "1000:1000";
             workdir = in-container-bench-dir;
-            extraOptions = ["--tmpfs" "${in-container-bench-dir}/config:rw,mode=0700,U"];
+            extraOptions = ["--tmpfs" "${in-container-bench-dir}/config:rw,mode=0770,U"];
             volumes = [
               "${cfg.frappe.benchDir}:${in-container-bench-dir}:O"
               "${cfg.frappe.benchDir}${assets-path}:${in-container-bench-dir}${assets-path}:ro"
@@ -357,6 +356,18 @@ in {
                 cfg.frappe.websocket.containerName
               ];
               cmd = ["nginx-entrypoint.sh"];
+              extraOptions = [
+                "--tmpfs"
+                "${in-container-bench-dir}/config:rw,mode=0770,U"
+                "--tmpfs"
+                "/etc/nginx/conf.d:rw,mode=0770,U"
+                "--tmpfs"
+                "/var/log/nginx:rw,mode=0770,U"
+                "--tmpfs"
+                "/var/lib/nginx:rw,mode=0770,U"
+                "--tmpfs"
+                "/run:rw,mode=0770,U"
+              ];
               environment = {
                 BACKEND = "unix:${frappe-socket}";
                 FRAPPE_SITE_NAME_HEADER = cfg.frappe.siteName;
