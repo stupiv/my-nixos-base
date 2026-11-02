@@ -87,8 +87,7 @@ in {
           };
           base = {
             tag = mkOption {
-              type = types.singleLineStr;
-              example = "v16.25.0";
+              type = types.strMatching "^v16\.\d+\.\d+$";
             };
             image = mkOption {
               type = types.singleLineStr;
@@ -102,9 +101,8 @@ in {
               default = "${name}-build";
             };
             tag = mkOption {
-              type = types.singleLineStr;
+              type = types.strMatching "^v16\.\d+\.\d+$";
               default = cfg.frappe.apps.erpnext.branch; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
-              example = "v16.26.2";
             };
           };
           frontend = {
