@@ -20,21 +20,22 @@ with lib; let
   valkey-socket-name = "valkey.sock";
   frappe-socket-name = "gunicorn.sock";
   socketio_port = "9000";
-  frappe-frontend-proxy-name = name: "${name}-frappe-frontend";
-  frappe-container-names = cfg: with cfg; [
-    mariadb.containerName
-    valkey.cache.containerName
-    valkey.queue.containerName
-    frappe.frontend.containerName
-    frappe.configurator.containerName
-    frappe.create-site.containerName
-    frappe.migrate.containerName
-    frappe.queue-long.containerName
-    frappe.queue-short.containerName
-    frappe.scheduler.containerName
-    frappe.backend.containerName
-    frappe.websocket.containerName
-  ];
+  sleep-on-idle-cfg = cfg: outerCfg.sleep-on-idle.${outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.sleep-on-idle-id};
+  container-names = cfg:
+    with cfg; [
+      mariadb.containerName
+      valkey.cache.containerName
+      valkey.queue.containerName
+      frappe.frontend.containerName
+      frappe.configurator.containerName
+      frappe.create-site.containerName
+      frappe.migrate.containerName
+      frappe.queue-long.containerName
+      frappe.queue-short.containerName
+      frappe.scheduler.containerName
+      frappe.backend.containerName
+      frappe.websocket.containerName
+    ];
   in-container-sites-dir = "${in-container-bench-dir}/sites";
   in-container-logs-dir = "${in-container-bench-dir}/logs";
   mariadb-socket = "${in-container-mariadb-socket-folder}/${mariadb-socket-name}";
@@ -64,9 +65,9 @@ in {
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.networkNamespace}.set-network-namespace = {
-          oci-containers = frappe-container-names cfg;
+          oci-containers = container-names cfg;
           systemd-services = [
-            outerCfg.myOpt.systemd-socket-proxyd.${frappe-frontend-proxy-name name}.proxy.serviceName
+            sleep-on-idle-cfg.endponts.default.proxy.name
           ];
         };
       })
@@ -89,31 +90,18 @@ in {
             sleep-on-idle = {
               health-check.path = "/api/method/ping";
               endpoints.default.origin = {
-                inherit (cfg.frappe.frontend) port host;
+                host = "127.0.0.1";
+                port = 8080;
               };
               set-cgroup-parent.systemd-services = with cfg.frappe; [
                 build.serviceName
               ];
-              set-cgroup-parent.oci-containers = frappe-container-names cfg;
+              set-cgroup-parent.oci-containers = container-names cfg;
             };
           };
         }
       ])))
       enabled;
-
-    myOpt.systemd-socket-proxyd = mkMerge (mapAttrsToList (name: cfg: {
-        "${frappe-frontend-proxy-name name}" = {
-          origin = {
-            host = "127.0.0.1";
-            port = 8080;
-            serviceName = outerCfg.virtualisation.oci-containers.containers.${cfg.frappe.frontend.containerName}.serviceName;
-          };
-          proxy = {
-            inherit (cfg.frappe.frontend) host port;
-          };
-        };
-      })
-      enabled);
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
         "d ${cfg.frappe.sitesDir} 700 1000 1000 - -"
