@@ -58,17 +58,17 @@ in {
           };
           sitesDir = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.stateDir}${cfg.sites-path}";
+            default = "${cfg.frappe.stateDir}${cfg.frappe.sites-path}";
             readOnly = true;
           };
           logsDir = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.stateDir}${cfg.logs-path}";
+            default = "${cfg.frappe.stateDir}${cfg.frappe.logs-path}";
             readOnly = true;
           };
           benchDir = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.stateDir}${cfg.bench-path}";
+            default = "${cfg.frappe.stateDir}${cfg.frappe.bench-path}";
             readOnly = true;
           };
           apps = mkOption {
