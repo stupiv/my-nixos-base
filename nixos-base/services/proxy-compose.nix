@@ -90,8 +90,8 @@ in {
           type = types.anything;
           default = name;
         };
-        default-caddy-origin-ip-socket = mkOption {
-          type = types.strMatching "^[^\/].+$";
+        default-caddy-origin-unix-socket = mkOption {
+          type = types.strMatching "^unix\/\/run\/.+[^\/]$";
           default = to-caddy-ip-socket sleep-on-idle-cfg.endpoints.default.proxy.ip-socket;
           readOnly = true;
         };
@@ -145,7 +145,7 @@ in {
 
     services.caddy = mkMerge (mapAttrsToList (
         _: cfg: let
-          inherit (cfg) localMode caddy cloudflared hostname default-caddy-origin-ip-socket;
+          inherit (cfg) localMode caddy cloudflared hostname default-caddy-origin-unix-socket;
           inherit (cfg.caddy) add-handle-reverse-proxy add-encode request_body;
           extraConfig = ''
             ${caddy.extraConfig}
@@ -156,7 +156,7 @@ in {
               if add-handle-reverse-proxy
               then ''
                 handle {
-                  reverse_proxy ${default-caddy-origin-ip-socket}
+                  reverse_proxy ${default-caddy-origin-unix-socket}
                 }
               ''
               else ''''
