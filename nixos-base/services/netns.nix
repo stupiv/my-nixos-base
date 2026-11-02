@@ -64,7 +64,7 @@ in {
       )
       enabled
     );
-    virtualisation.oci-containers = mkMerge (
+    virtualisation.oci-containers.containers = mkMerge (
       mapAttrsToList (
         _: cfg: (genAttrs cfg.set-network-namespace.oci-containers (_: {
           networks = ["ns:${cfg.NetworkNamespacePath}"];
@@ -85,7 +85,7 @@ in {
         enabled)
       ++ (mapAttrsToList (_: cfg: (genAttrs (
           (cfg.set-network-namespace.systemd-services)
-          ++ (map (containerName: "${outerCfg.virtualisation.oci-containers.${containerName}.serviceName}") cfg.set-network-namespace.oci-containers)
+          ++ (map (containerName: "${outerCfg.virtualisation.oci-containers.containers.${containerName}.serviceName}") cfg.set-network-namespace.oci-containers)
           ++ (map (containerName: "container@${containerName}") cfg.set-network-namespace.nixos-containers)
         ) (_: {
           bindsTo = [cfg.serviceUnit];

@@ -20,8 +20,8 @@ with lib; let
   valkey-socket-name = "valkey.sock";
   frappe-socket-name = "gunicorn.sock";
   socketio_port = "9000";
-  sleep-on-idle-cfg = cfg: outerCfg.sleep-on-idle.${outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.sleep-on-idle-id};
-  container-names = cfg:
+  mk-sleep-on-idle-cfg = cfg: outerCfg.myOpt.sleep-on-idle.${outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.sleep-on-idle-id};
+  mk-container-names = cfg:
     with cfg; [
       mariadb.containerName
       valkey.cache.containerName
@@ -61,30 +61,35 @@ with lib; let
   configurator-script = pkgs.writeScript "configurator.sh" (builtins.readFile ./configurator.sh);
 in {
   config = mkIf (enabled != {}) {
-    assertions = concatLists (mapAttrsToList (name: cfg:
-      optionals [
+    assertions = concatLists (mapAttrsToList (name: cfg: [
         {
           assertion = !(cfg.frappe.apps ? "erpnext") || cfg.frappe.build.tag == cfg.frappe.apps.erpnext.branch;
+          message = "ERPNext tag and build tag are one. See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl";
+        }
+        {
+          assertion = !(cfg.frappe.apps ? "helpdesk") || cfg.frappe.apps ? "telephony";
+          message = "Helpdesk requires Telephony. See https://github.com/frappe/helpdesk";
         }
       ])
-    enabled);
+      enabled);
 
     virtualisation.oci-containers.backend = "podman";
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.networkNamespace}.set-network-namespace = {
-          oci-containers = container-names cfg;
+        ${name}.set-network-namespace = {
+          oci-containers = mk-container-names cfg;
           systemd-services = [
-            sleep-on-idle-cfg.endponts.default.proxy.name
+            (mk-sleep-on-idle-cfg cfg).endpoints.default.proxy.name
           ];
+          nixos-containers = [];
         };
       })
       enabled);
 
     sops.secrets = mkMerge (mapAttrsToList (
         name: cfg: {
-          ${cfg.frappe.envfile-key} = {};
-          ${cfg.mariadb.envfile-key} = {};
+          ${cfg.frappe.envfile-key} = {inherit (cfg) sopsFile;};
+          ${cfg.mariadb.envfile-key} = {inherit (cfg) sopsFile;};
         }
       )
       enabled);
@@ -104,7 +109,7 @@ in {
               set-cgroup-parent.systemd-services = with cfg.frappe; [
                 build.serviceName
               ];
-              set-cgroup-parent.oci-containers = container-names cfg;
+              set-cgroup-parent.oci-containers = mk-container-names cfg;
             };
           };
         }

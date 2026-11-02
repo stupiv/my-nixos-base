@@ -27,6 +27,10 @@ in {
           type = types.anything;
           default = name;
         };
+        sopsFile = mkOption {
+          type = types.anything;
+          default = name;
+        };
         frappe = {
           readOnlyMode = mkOption {
             type = types.bool;
@@ -36,32 +40,26 @@ in {
             type = types.strMatching "^\/var\/lib\/.+[^\/]$";
             example = "/var/lib/${name}/frappe";
           };
-          sites-path = mkOption {
+          sitesPath = mkOption {
             type = types.strMatching "^\/.+[^\/]$";
             example = "/sites";
           };
-          logs-path = mkOption {
+          logsPath = mkOption {
             type = types.strMatching "^\/.+[^\/]$";
             example = "/logs";
           };
-          bench-path = mkOption {
-            type = types.strMatching "^\/.+[^\/]$";
-            example = "/frappe-bench";
-          };
           sitesDir = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.frappe.stateDir}${cfg.frappe.sites-path}";
+            default = "${cfg.frappe.stateDir}${cfg.frappe.sitesPath}";
             readOnly = true;
           };
           logsDir = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.frappe.stateDir}${cfg.frappe.logs-path}";
+            default = "${cfg.frappe.stateDir}${cfg.frappe.logsPath}";
             readOnly = true;
           };
           benchDir = mkOption {
             type = types.singleLineStr;
-            default = "${cfg.frappe.stateDir}${cfg.frappe.bench-path}";
-            readOnly = true;
           };
           apps = mkOption {
             type = types.attrsOf (types.submodule ({name, ...}: {
@@ -87,7 +85,7 @@ in {
           };
           base = {
             tag = mkOption {
-              type = types.strMatching "^v16\.\d+\.\d+$";
+              type = types.strMatching "^v16\.[0-9]+\.[0-9]+$";
             };
             image = mkOption {
               type = types.singleLineStr;
@@ -101,22 +99,13 @@ in {
               default = "${name}-build";
             };
             tag = mkOption {
-              type = types.strMatching "^v16\.\d+\.\d+$";
+              type = types.strMatching "^v16\.[0-9]+\.[0-9]+$";
               default = cfg.frappe.apps.erpnext.branch; # See https://raw.githubusercontent.com/frappe/frappe_docker/main/docker-bake.hcl
             };
           };
-          frontend = {
-            containerName = mkOption {
-              type = types.singleLineStr;
-              default = "${name}-frontend";
-            };
-            port = mkOption {
-              type = types.port;
-            };
-            host = mkOption {
-              type = types.singleLineStr;
-              default = "127.0.0.1";
-            };
+          frontend.containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-frontend";
           };
           backend = {
             containerName = mkOption {
@@ -129,11 +118,9 @@ in {
               readOnly = true;
             };
           };
-          configurator = {
-            containerName = mkOption {
-              type = types.singleLineStr;
-              default = "${name}-configurator";
-            };
+          configurator.containerName = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-configurator";
           };
           siteName = mkOption {
             type = types.singleLineStr;
