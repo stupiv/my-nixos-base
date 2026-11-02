@@ -41,8 +41,8 @@ in {
 
         block_ipv6 = cfg.ipv6.disable;
         ipv6_servers = true;
-        # listen_addresses = ["127.0.0.1:53" "[::1]:53"];
-        listen_addresses = ["[::]:53"];
+        listen_addresses = ["127.0.0.1:53" "[::1]:53"];
+        # listen_addresses = ["[::]:53"]; # This will cause podman dns to fail.
 
         require_dnssec = true;
         require_nolog = false;
