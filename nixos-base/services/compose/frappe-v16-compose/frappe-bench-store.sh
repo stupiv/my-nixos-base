@@ -42,9 +42,9 @@ trap 'rm -rf "$work"' EXIT
 
 USERNS_ARGS=()
 if [[ $EUID -eq 0 ]]; then
-  chown 1000:0 "$work"
+  chmod 0777 "$work"
 else
-  USERNS_ARGS=("--userns=keep-id:uid=1000,gid=0")
+  USERNS_ARGS=("--userns=keep-id")
 fi
 
 podman run --rm \

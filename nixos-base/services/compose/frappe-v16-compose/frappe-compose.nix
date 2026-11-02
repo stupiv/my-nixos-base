@@ -117,14 +117,14 @@ in {
       enabled;
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${cfg.frappe.sitesDir} 770 1000 0 - -"
-        "d ${cfg.frappe.logsDir} 770 1000 0 - -"
-        "d ${cfg.frappe.backend.socket-folder} 770 1000 0 - -"
-        "d ${cfg.mariadb.stateDir} 700 999 999 - -"
-        "d ${cfg.mariadb.socket-folder} 777 - - - -"
-        "d ${cfg.valkey.queue.stateDir} 700 0 0 - -"
-        "d ${cfg.valkey.cache.socket-folder} 770 1000 0 - -"
-        "d ${cfg.valkey.queue.socket-folder} 770 1000 0 - -"
+        "d ${cfg.frappe.sitesDir} 0770 0 0 - -"
+        "d ${cfg.frappe.logsDir} 0770 0 0 - -"
+        "d ${cfg.frappe.backend.socket-folder} 0770 0 0 - -"
+        "d ${cfg.mariadb.stateDir} 0700 999 999 - -"
+        "d ${cfg.mariadb.socket-folder} 0777 - - - -"
+        "d ${cfg.valkey.queue.stateDir} 0700 0 0 - -"
+        "d ${cfg.valkey.cache.socket-folder} 0770 0 0 - -"
+        "d ${cfg.valkey.queue.socket-folder} 0770 0 0 - -"
       ])
       enabled);
 
