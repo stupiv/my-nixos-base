@@ -20,7 +20,21 @@ with lib; let
   valkey-socket-name = "valkey.sock";
   frappe-socket-name = "gunicorn.sock";
   socketio_port = "9000";
-
+  frappe-frontend-proxy-name = name: "${name}-frappe-frontend";
+  frappe-container-names = cfg: with cfg; [
+    mariadb.containerName
+    valkey.cache.containerName
+    valkey.queue.containerName
+    frappe.frontend.containerName
+    frappe.configurator.containerName
+    frappe.create-site.containerName
+    frappe.migrate.containerName
+    frappe.queue-long.containerName
+    frappe.queue-short.containerName
+    frappe.scheduler.containerName
+    frappe.backend.containerName
+    frappe.websocket.containerName
+  ];
   in-container-sites-dir = "${in-container-bench-dir}/sites";
   in-container-logs-dir = "${in-container-bench-dir}/logs";
   mariadb-socket = "${in-container-mariadb-socket-folder}/${mariadb-socket-name}";
@@ -47,7 +61,16 @@ with lib; let
 in {
   config = mkIf (enabled != {}) {
     virtualisation.oci-containers.backend = "podman";
-    virtualisation.podman.defaultNetwork.settings.dns_enabled = true;
+
+    myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.networkNamespace}.set-network-namespace = {
+          oci-containers = frappe-container-names cfg;
+          systemd-services = [
+            outerCfg.myOpt.systemd-socket-proxyd.${frappe-frontend-proxy-name name}.proxy.serviceName
+          ];
+        };
+      })
+      enabled);
 
     sops.secrets = mkMerge (mapAttrsToList (
         name: cfg: {
@@ -71,28 +94,26 @@ in {
               set-cgroup-parent.systemd-services = with cfg.frappe; [
                 build.serviceName
               ];
-              set-cgroup-parent.oci-containers =
-                (with cfg; [
-                  mariadb.containerName
-                  valkey.cache.containerName
-                  valkey.queue.containerName
-                ])
-                ++ (with cfg.frappe; [
-                  frontend.containerName
-                  configurator.containerName
-                  create-site.containerName
-                  migrate.containerName
-                  queue-long.containerName
-                  queue-short.containerName
-                  scheduler.containerName
-                  backend.containerName
-                  websocket.containerName
-                ]);
+              set-cgroup-parent.oci-containers = frappe-container-names cfg;
             };
           };
         }
       ])))
       enabled;
+
+    myOpt.systemd-socket-proxyd = mkMerge (mapAttrsToList (name: cfg: {
+        "${frappe-frontend-proxy-name name}" = {
+          origin = {
+            host = "127.0.0.1";
+            port = 8080;
+            serviceName = outerCfg.virtualisation.oci-containers.containers.${cfg.frappe.frontend.containerName}.serviceName;
+          };
+          proxy = {
+            inherit (cfg.frappe.frontend) host port;
+          };
+        };
+      })
+      enabled);
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
         "d ${cfg.frappe.sitesDir} 700 1000 1000 - -"
@@ -254,7 +275,7 @@ in {
               ];
               entrypoint = "bash";
               environment = {
-                MARIADB_SERVICE = cfg.mariadb.containerName; # We need DNS here
+                MARIADB_SERVICE = "localhost";
                 MARIADB_SOCKET = mariadb-socket;
                 VALKEY_CACHE_SOCKET = valkey-cache-socket;
                 VALKEY_QUEUE_SOCKET = valkey-queue-socket;
@@ -337,14 +358,13 @@ in {
               environment = {
                 BACKEND = "unix:${frappe-socket}";
                 FRAPPE_SITE_NAME_HEADER = cfg.frappe.siteName;
-                SOCKETIO = "${cfg.frappe.websocket.containerName}:${socketio_port}"; # We need DNS here
+                SOCKETIO = "127.0.0.1:${socketio_port}";
                 UPSTREAM_REAL_IP_ADDRESS = "127.0.0.1";
                 UPSTREAM_REAL_IP_HEADER = "X-Forwarded-For";
                 UPSTREAM_REAL_IP_RECURSIVE = "off";
                 PROXY_READ_TIMEOUT = "120";
                 CLIENT_MAX_BODY_SIZE = "50m";
               };
-              ports = ["${cfg.frappe.frontend.host}:${toString cfg.frappe.frontend.port}:8080"];
             }
           ];
         }
