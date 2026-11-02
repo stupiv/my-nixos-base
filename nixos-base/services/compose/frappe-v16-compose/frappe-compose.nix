@@ -61,6 +61,14 @@ with lib; let
   configurator-script = pkgs.writeScript "configurator.sh" (builtins.readFile ./configurator.sh);
 in {
   config = mkIf (enabled != {}) {
+    assertions = concatLists (mapAttrsToList (name: cfg:
+      optionals [
+        {
+          assertion = !(cfg.frappe.apps ? "erpnext") || cfg.frappe.build.tag == cfg.frappe.apps.erpnext.branch;
+        }
+      ])
+    enabled);
+
     virtualisation.oci-containers.backend = "podman";
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
