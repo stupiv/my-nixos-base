@@ -1,3 +1,6 @@
 {
-  imports = [./frappe-compose.nix];
+  imports = [
+    ./frappe-compose.nix
+    ./options.nix
+  ];
 }
