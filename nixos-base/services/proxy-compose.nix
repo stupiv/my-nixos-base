@@ -95,11 +95,6 @@ in {
           default = to-caddy-ip-socket sleep-on-idle-cfg.endpoints.default.proxy.ip-socket;
           readOnly = true;
         };
-        cgroup-parent = mkOption {
-          type = types.anything;
-          default = sleep-on-idle-cfg.cgroup-parent;
-          readOnly = true;
-        };
       };
     }));
   };

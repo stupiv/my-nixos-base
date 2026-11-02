@@ -74,11 +74,6 @@ in {
             default = null;
           };
         };
-        default-caddy-origin-ip-socket = mkOption {
-          type = types.singleLineStr;
-          default = outerCfg.myOpt.proxy-compose.${config.n8n.containerName}.default-caddy-origin-ip-socket;
-          readOnly = true;
-        };
       };
     }));
   };

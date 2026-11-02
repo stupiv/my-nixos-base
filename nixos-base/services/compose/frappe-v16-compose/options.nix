@@ -23,17 +23,9 @@ in {
             default = {};
           };
         };
-        networkNamespace = mkOption {
-          type = types.anything;
-        };
         proxy-compose-id = mkOption {
           type = types.anything;
           default = name;
-        };
-        cgroup-parent = mkOption {
-          type = types.anything;
-          default = outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.cgroup-parent;
-          readOnly = true;
         };
         frappe = {
           readOnlyMode = mkOption {
