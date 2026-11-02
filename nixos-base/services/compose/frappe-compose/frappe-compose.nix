@@ -476,7 +476,7 @@ in {
               ];
               entrypoint = "bash";
               environment = {
-                MARIADB_SERVICE = cfg.mariadb.containerName;
+                MARIADB_SERVICE = cfg.mariadb.containerName; # We need DNS here
                 MARIADB_SOCKET = mariadb-socket;
                 VALKEY_CACHE_SOCKET = valkey-cache-socket;
                 VALKEY_QUEUE_SOCKET = valkey-queue-socket;
@@ -559,7 +559,7 @@ in {
               environment = {
                 BACKEND = "unix:${frappe-socket}";
                 FRAPPE_SITE_NAME_HEADER = cfg.frappe.siteName;
-                SOCKETIO = "${cfg.frappe.websocket.containerName}:${socketio_port}";
+                SOCKETIO = "${cfg.frappe.websocket.containerName}:${socketio_port}"; # We need DNS here
                 UPSTREAM_REAL_IP_ADDRESS = "127.0.0.1";
                 UPSTREAM_REAL_IP_HEADER = "X-Forwarded-For";
                 UPSTREAM_REAL_IP_RECURSIVE = "off";
