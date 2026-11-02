@@ -180,6 +180,7 @@ in {
             autoStart = false;
             inherit (cfg.mariadb) image;
             environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
+            environment.MARIADB_AUTO_UPGRADE = "1";
             cmd = [
               "--character-set-server=utf8mb4"
               "--collation-server=utf8mb4_unicode_ci"
