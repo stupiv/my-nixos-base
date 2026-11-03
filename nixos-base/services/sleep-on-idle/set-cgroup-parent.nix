@@ -9,8 +9,9 @@ with lib; let
 in {
   config = mkIf (enabled != {}) {
     systemd.services = mkMerge (mapAttrsToList (_: cfg: (genAttrs (
-        cfg.set-cgroup-parent.systemd-services
-        ++ (map (containerName: outerCfg.virtualisation.oci-containers.containers.${containerName}.serviceName) cfg.set-cgroup-parent.oci-containers)
+        (cfg.set-cgroup-parent.systemd-services)
+        ++ (map (oci-con: outerCfg.virtualisation.oci-containers.containers.${oci-con}.serviceName) cfg.set-cgroup-parent.oci-containers)
+        ++ (map (nixos-con: "container@${nixos-con}") cfg.set-cgroup-parent.nixos-containers)
       ) (_: {
         wantedBy = mkForce ["${cfg.freezeUnit}"];
         after = ["${cfg.freezeUnit}"];

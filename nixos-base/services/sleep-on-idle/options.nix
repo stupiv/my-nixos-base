@@ -32,6 +32,9 @@ in {
           oci-containers = mkOption {
             type = types.listOf types.singleLineStr;
           };
+          nixos-containers = mkOption {
+            type = types.listOf types.singleLineStr;
+          };
         };
         endpoints = mkOption {
           default = {};

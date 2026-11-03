@@ -124,7 +124,6 @@ in {
           };
           siteName = mkOption {
             type = types.singleLineStr;
-            default = "frontend";
           };
           create-site.containerName = mkOption {
             type = types.singleLineStr;

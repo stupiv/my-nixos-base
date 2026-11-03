@@ -92,6 +92,7 @@ in {
                 };
                 set-cgroup-parent.systemd-services = [cfg.serviceName];
                 set-cgroup-parent.oci-containers = [];
+                set-cgroup-parent.nixos-containers = [];
               };
             }
           ];

@@ -32,9 +32,14 @@ in {
                 type = types.listOf types.singleLineStr;
               };
             };
-            networkNamespace = mkOption {
+            ns = mkOption {
               type = types.singleLineStr;
               default = builtins.substring 0 7 (builtins.hashString "sha256" name);
+            };
+            nsPath = mkOption {
+              type = types.singleLineStr;
+              default = "/run/netns/${cfg.networkNamespace}";
+              readOnly = true;
             };
             serviceName = mkOption {
               type = types.singleLineStr;
@@ -43,11 +48,6 @@ in {
             serviceUnit = mkOption {
               type = types.singleLineStr;
               default = "${cfg.serviceName}.service";
-              readOnly = true;
-            };
-            NetworkNamespacePath = mkOption {
-              type = types.singleLineStr;
-              default = "/run/netns/${cfg.networkNamespace}";
               readOnly = true;
             };
           };
@@ -59,7 +59,7 @@ in {
     containers = mkMerge (
       mapAttrsToList (
         _: cfg: (genAttrs cfg.set-network-namespace.nixos-containers (_: {
-          inherit (cfg) networkNamespace;
+          networkNamespace = cfg.nsPath;
         }))
       )
       enabled
@@ -67,7 +67,7 @@ in {
     virtualisation.oci-containers.containers = mkMerge (
       mapAttrsToList (
         _: cfg: (genAttrs cfg.set-network-namespace.oci-containers (_: {
-          networks = ["ns:${cfg.NetworkNamespacePath}"];
+          networks = ["ns:${cfg.nsPath}"];
         }))
       )
       enabled
@@ -75,7 +75,7 @@ in {
     systemd.services = mkMerge (
       (mapAttrsToList (_: cfg: (genAttrs cfg.set-network-namespace.systemd-services (_: {
           serviceConfig = {
-            inherit (cfg) NetworkNamespacePath;
+            NetworkNamespacePath = cfg.nsPath;
             InaccessiblePaths = [
               "/run/nscd"
               "/run/resolvconf"
@@ -85,15 +85,15 @@ in {
         enabled)
       ++ (mapAttrsToList (_: cfg: (genAttrs (
           (cfg.set-network-namespace.systemd-services)
-          ++ (map (containerName: "${outerCfg.virtualisation.oci-containers.containers.${containerName}.serviceName}") cfg.set-network-namespace.oci-containers)
-          ++ (map (containerName: "container@${containerName}") cfg.set-network-namespace.nixos-containers)
+          ++ (map (oci-con: outerCfg.virtualisation.oci-containers.containers.${oci-con}.serviceName) cfg.set-network-namespace.oci-containers)
+          ++ (map (nixos-con: "container@${nixos-con}") cfg.set-network-namespace.nixos-containers)
         ) (_: {
           bindsTo = [cfg.serviceUnit];
           after = [cfg.serviceUnit];
         })))
       enabled)
       ++ (mapAttrsToList (name: cfg: let
-          ns = cfg.networkNamespace;
+          inherit (cfg) ns;
           up = pkgs.writeShellScript "${cfg.serviceName}-up" ''
             set -eu
             if ${ip} netns list | ${pkgs.gnugrep}/bin/grep -qw '${ns}'; then

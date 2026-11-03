@@ -91,6 +91,7 @@ in {
             endpoints.default.origin = {inherit (cfg.n8n) host port;};
             set-cgroup-parent.systemd-services = [];
             set-cgroup-parent.oci-containers = [cfg.n8n.containerName];
+            set-cgroup-parent.nixos-containers = [];
           };
           caddy = {
             inherit (cfg.caddy) extraConfig;

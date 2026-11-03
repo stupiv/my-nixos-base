@@ -290,6 +290,7 @@ in {
                   if cfg.frappe.readOnlyMode
                   then "1"
                   else "0";
+                HOST_NAME = "https://${cfg.modules.proxy-compose.hostname}";
               };
               volumes = ["${toString configurator-script}:/opt/configurator.sh:ro"];
               cmd = ["/opt/configurator.sh"];

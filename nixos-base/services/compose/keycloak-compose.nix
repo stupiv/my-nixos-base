@@ -45,11 +45,6 @@ in {
             default = "/run/keycloak-compose/${name}";
           };
         };
-        serviceName = mkOption {
-          type = types.singleLineStr;
-          default = "container@${cfg.container.name}";
-          readOnly = true;
-        };
         database.port = mkOption {
           type = types.port;
           default = 15447;
@@ -71,8 +66,9 @@ in {
           modules.sleep-on-idle = {
             health-check.path = "/";
             endpoints.default.origin.ip-socket = outerCfg.myOpt.keycloak.${name}.unix-socket;
-            set-cgroup-parent.systemd-services = [cfg.serviceName];
+            set-cgroup-parent.systemd-services = [];
             set-cgroup-parent.oci-containers = [];
+            set-cgroup-parent.nixos-containers = [cfg.container.name];
           };
         }
       ]))
