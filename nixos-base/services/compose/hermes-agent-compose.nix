@@ -252,7 +252,7 @@ in {
           config = {...}: {
             imports = [
               inputs.hermes-agent.nixosModules.default
-              ../../myLib
+              ../../../myLib
               ../systemd-socket-proxyd.nix
             ];
             users.groups.${cfg.hermes-agent.group}.gid = cfg.hermes-agent.gid;

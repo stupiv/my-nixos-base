@@ -175,7 +175,7 @@ in {
           config = {...}: {
             imports = [
               ../../myLib
-              ../systemd-socket-proxyd.nix
+              ./systemd-socket-proxyd.nix
             ];
             myOpt.systemd-socket-proxyd.litellm = {
               origin = {inherit (cfg) host port;};
