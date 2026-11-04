@@ -35,6 +35,10 @@ in {
           type = types.nullOr types.singleLineStr;
           readOnly = true;
         };
+        environment = mkOption {
+          type = types.attrsOf types.singleLineStr;
+          default = {};
+        };
         proxy-compose-id = mkOption {
           type = types.anything;
           default = name;

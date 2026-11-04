@@ -44,7 +44,7 @@ with lib; let
       "--security-opt=no-new-privileges"
       "--read-only"
     ];
-  mk-proxy-environment = cfg:
+  mk-proxy-env = cfg:
     optionals (cfg.httpProxy != null) {HTTP_PROXY = cfg.httpProxy;}
     // optionals (cfg.httpsProxy != null) {HTTPS_PROXY = cfg.httpsProxy;}
     // {
@@ -80,6 +80,7 @@ in {
           httpProxy = config.networking.proxy.httpProxy;
           httpsProxy = config.networking.proxy.httpsProxy;
           noProxy = config.networking.proxy.noProxy;
+          environment = mkDefault (mk-proxy-env cfg);
         };
       })
       enabled);
@@ -166,7 +167,7 @@ in {
             BUILD_IMAGE_TAG = cfg.frappe.build.tag;
             BENCH_INIT_SCRIPT = toString bench-init-script;
             BENCH_DIR = cfg.frappe.benchDir;
-          } // mk-proxy-environment cfg;
+          };
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -184,14 +185,15 @@ in {
           valkey_base = {
             autoStart = false;
             inherit (cfg.valkey) image;
-            environment = mk-proxy-environment cfg;
+            environment = cfg.environment;
             extraOptions = mk-security-extra-options "256m";
           };
           frappe_base = {
             autoStart = false;
             inherit (cfg.frappe.base) image;
             environmentFiles = [config.sops.secrets.${cfg.frappe.envfile-key}.path];
-            environment = mk-proxy-environment cfg;
+            environment = cfg.environment;
+            entrypoint = "";
             user = "frappe";
             workdir = in-container-bench-dir;
             extraOptions =
@@ -215,7 +217,7 @@ in {
             environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
             environment = {
               MARIADB_AUTO_UPGRADE = "1";
-            } // mk-proxy-environment cfg;
+            } // cfg.environment;
             extraOptions = mk-security-extra-options "512m";
             cmd = [
               "--character-set-server=utf8mb4"
