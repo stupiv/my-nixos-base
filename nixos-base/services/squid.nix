@@ -26,6 +26,12 @@ in {
             type = types.singleLineStr;
           };
         };
+        egress-restriction = {
+          enable = mkOption {
+            type = types.bool;
+            description = "Whether to use the custom Squid egress-restriction configuration.";
+          };
+        };
         modules.services.squid = mkOption {
           type = types.submodule ({...}: {
             freeformType = types.anything;
@@ -59,8 +65,14 @@ in {
         logDir = mkOption {
           type = types.singleLineStr;
         };
-        fqd-list = mkOption {
-          type = types.listOf types.singleLineStr;
+        fqdn-list = mkOption {
+          type = types.listOf (types.strMatching "^\\.?([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$");
+          default = [];
+          description = ''
+            FQDNs Squid may connect to. An entry without a leading dot matches
+            that exact name; prefix with a dot to also match its subdomains.
+            An empty list denies all proxy destinations.
+          '';
         };
         proxy = {
           serviceName = mkOption {
@@ -91,7 +103,7 @@ in {
             "--bind=${cfg.logDir}:/var/log/squid:idmap"
             "--bind=${cfg.cacheDir}:/var/cache/squid:idmap"
           ];
-          config = {...}: {
+          config = {config, ...}: {
             nixpkgs.pkgs = pkgs;
             systemd.tmpfiles.rules = [
               "d '${cfg.logDir}' 0700 squid squid - -"
@@ -101,10 +113,35 @@ in {
               cfg.modules.services.squid
               {
                 enable = true;
-                configText = null;
-                extraConfig = ''
-                '';
               }
+              (mkIf cfg.egress-restriction.enable {
+                configText = mkForce ''
+                  acl my_squid_connect method CONNECT
+                  acl my_squid_https_port port 443
+                  acl my_squid_non_public_dst dst 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4
+                  acl my_squid_non_public_dst dst ::/128 ::1/128 fc00::/7 fe80::/10 ff00::/8
+                  ${optionalString (cfg.fqdn-list != []) ''
+                    acl my_squid_allowed_fqdns dstdomain -n ${concatStringsSep " " cfg.fqdn-list}
+                  ''}
+
+                  http_access deny to_localhost
+                  http_access deny my_squid_non_public_dst
+                  http_access deny !my_squid_connect
+                  http_access deny my_squid_connect !my_squid_https_port
+                  ${optionalString (cfg.fqdn-list != []) ''
+                    http_access allow my_squid_connect my_squid_https_port my_squid_allowed_fqdns
+                  ''}
+                  http_access deny all
+
+                  cache deny all
+                  cache_log stdio:/var/log/squid/cache.log
+                  access_log stdio:/var/log/squid/access.log
+                  pid_filename ${config.systemd.services.squid.serviceConfig.PIDFile}
+                  cache_effective_user squid squid
+                  http_port ${optionalString (config.services.squid.proxyAddress != null) "${config.services.squid.proxyAddress}:"}${toString config.services.squid.proxyPort}
+                  coredump_dir /var/cache/squid
+                '';
+              })
             ];
           };
         };
