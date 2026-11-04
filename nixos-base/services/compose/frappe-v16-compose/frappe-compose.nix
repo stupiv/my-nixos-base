@@ -36,6 +36,20 @@ with lib; let
       frappe.backend.containerName
       frappe.websocket.containerName
     ];
+  mk-security-extra-options = tmpfs-size:
+    concatMap (flag: [flag]) [
+      "--tmpfs=/tmp:rw,nosuid,nodev,size=${tmpfs-size}"
+      "--pids-limit=1024"
+      "--cap-drop=ALL"
+      "--security-opt=no-new-privileges"
+      "--read-only"
+    ];
+  mk-proxy-environment = cfg:
+    optionals (cfg.httpProxy != null) {HTTP_PROXY = cfg.httpProxy;}
+    // optionals (cfg.httpsProxy != null) {HTTPS_PROXY = cfg.httpsProxy;}
+    // {
+      NO_PROXY = or (cfg.noProxy) "localhost,127.0.0.1,::1";
+    };
   in-container-sites-dir = "${in-container-bench-dir}/sites";
   in-container-logs-dir = "${in-container-bench-dir}/logs";
   mariadb-socket = "${in-container-mariadb-socket-folder}/${mariadb-socket-name}";
@@ -61,6 +75,15 @@ with lib; let
   configurator-script = pkgs.writeScript "configurator.sh" (builtins.readFile ./configurator.sh);
 in {
   config = mkIf (enabled != {}) {
+    myOpt.frappe-v16-compose = mkMerge (mapAttrsToList (name: cfg: {
+        ${name} = {
+          httpProxy = config.networking.proxy.httpProxy;
+          httpsProxy = config.networking.proxy.httpsProxy;
+          noProxy = config.networking.proxy.noProxy;
+        };
+      })
+      enabled);
+
     assertions = concatLists (mapAttrsToList (name: cfg: [
         {
           assertion = !(cfg.frappe.apps ? "erpnext") || cfg.frappe.build.tag == cfg.frappe.apps.erpnext.branch;
@@ -143,7 +166,7 @@ in {
             BUILD_IMAGE_TAG = cfg.frappe.build.tag;
             BENCH_INIT_SCRIPT = toString bench-init-script;
             BENCH_DIR = cfg.frappe.benchDir;
-          };
+          } // mk-proxy-environment cfg;
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -161,14 +184,19 @@ in {
           valkey_base = {
             autoStart = false;
             inherit (cfg.valkey) image;
+            environment = mk-proxy-environment cfg;
+            extraOptions = mk-security-extra-options "256m";
           };
           frappe_base = {
             autoStart = false;
             inherit (cfg.frappe.base) image;
             environmentFiles = [config.sops.secrets.${cfg.frappe.envfile-key}.path];
+            environment = mk-proxy-environment cfg;
             user = "frappe";
             workdir = in-container-bench-dir;
-            extraOptions = ["--tmpfs" "${in-container-bench-dir}/config:rw,mode=0770,U"];
+            extraOptions =
+              mk-security-extra-options "256m"
+              ++ ["--tmpfs" "${in-container-bench-dir}/config:rw,mode=0770,U"];
             volumes = [
               "${cfg.frappe.benchDir}:${in-container-bench-dir}:O"
               "${cfg.frappe.benchDir}${assets-path}:${in-container-bench-dir}${assets-path}:ro"
@@ -185,7 +213,10 @@ in {
             autoStart = false;
             inherit (cfg.mariadb) image;
             environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
-            environment.MARIADB_AUTO_UPGRADE = "1";
+            environment = {
+              MARIADB_AUTO_UPGRADE = "1";
+            } // mk-proxy-environment cfg;
+            extraOptions = mk-security-extra-options "512m";
             cmd = [
               "--character-set-server=utf8mb4"
               "--collation-server=utf8mb4_unicode_ci"

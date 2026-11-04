@@ -47,13 +47,23 @@ else
   USERNS_ARGS=("--userns=keep-id")
 fi
 
+PROXY_ARGS=()
+for var in HTTP_PROXY HTTPS_PROXY NO_PROXY; do
+  if [[ -n "${!var:-}" ]]; then
+    PROXY_ARGS+=(-e "${var}=${!var}")
+  fi
+done
+
 podman run --rm \
   --name "frappe-bench-store-${SPEC_HASH}" \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges \
   -v "$work":/home/frappe/frappe-bench \
   -v "$(realpath "$APPS_JSON")":/opt/frappe/apps.json:ro \
   -v "$(realpath "$BENCH_INIT_SCRIPT")":/opt/bench-init.sh:ro \
   -e "FRAPPE_BRANCH=${FRAPPE_BRANCH}" \
   "${USERNS_ARGS[@]}" \
+  "${PROXY_ARGS[@]}" \
   "$IMAGE" \
   bash /opt/bench-init.sh
 

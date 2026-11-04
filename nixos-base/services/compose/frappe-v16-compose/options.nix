@@ -23,6 +23,18 @@ in {
             default = {};
           };
         };
+        httpProxy = mkOption {
+          type = types.nullOr types.singleLineStr;
+          readOnly = true;
+        };
+        httpsProxy = mkOption {
+          type = types.nullOr types.singleLineStr;
+          readOnly = true;
+        };
+        noProxy = mkOption {
+          type = types.nullOr types.singleLineStr;
+          readOnly = true;
+        };
         proxy-compose-id = mkOption {
           type = types.anything;
           default = name;
