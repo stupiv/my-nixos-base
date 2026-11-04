@@ -18,6 +18,14 @@ in {
           type = types.bool;
           default = true;
         };
+        egress-restriction = {
+          enable = mkOption {
+            type = types.bool;
+          };
+          fqdns = mkOption {
+            type = types.listOf (types.strMatching "^\\.?([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$");
+          };
+        };
         sleep-on-idle = {
           enable = mkOption {
             type = types.bool;
@@ -59,9 +67,6 @@ in {
         logDir = mkOption {
           type = types.singleLineStr;
         };
-        fqd-list = mkOption {
-          type = types.listOf types.singleLineStr;
-        };
         proxy = {
           serviceName = mkOption {
             types = types.singleLineStr;
@@ -91,7 +96,7 @@ in {
             "--bind=${cfg.logDir}:/var/log/squid:idmap"
             "--bind=${cfg.cacheDir}:/var/cache/squid:idmap"
           ];
-          config = {...}: {
+          config = {config, ...}: {
             nixpkgs.pkgs = pkgs;
             systemd.tmpfiles.rules = [
               "d '${cfg.logDir}' 0700 squid squid - -"
@@ -101,10 +106,24 @@ in {
               cfg.modules.services.squid
               {
                 enable = true;
-                configText = null;
-                extraConfig = ''
-                '';
+                configFile = null;
               }
+              (mkIf cfg.egress-restristion.enable {
+                extraConfig = mkBefore ''
+                  acl my_squid_connect method CONNECT
+                  acl my_squid_https_port port 443
+                  ${optionalString (cfg.egress-restristion.fqdns != []) ''
+                    acl my_squid_allowed_fqdns dstdomain -n ${concatStringsSep " " cfg.egress-restristion.fqdns}
+                  ''}
+
+                  http_access deny !my_squid_connect
+                  http_access deny my_squid_connect !my_squid_https_port
+                  ${optionalString (cfg.egress-restristion.fqdns != []) ''
+                    http_access deny my_squid_connect my_squid_https_port !my_squid_allowed_fqdns
+                    http_access allow my_squid_connect my_squid_https_port my_squid_allowed_fqdns
+                  ''}
+                '';
+              })
             ];
           };
         };
