@@ -69,7 +69,7 @@ in {
         };
         proxy = {
           serviceName = mkOption {
-            types = types.singleLineStr;
+            type = types.singleLineStr;
             default = name;
           };
           unix-socket = mkOption {
@@ -99,38 +99,91 @@ in {
           config = {config, ...}: {
             nixpkgs.pkgs = pkgs;
             systemd.tmpfiles.rules = [
-              "d '${cfg.logDir}' 0700 squid squid - -"
-              "d '${cfg.cacheDir}' 0700 squid squid - -"
+              "d /var/log/squid 0700 squid squid - -"
+              "d /var/cache/squid 0700 squid squid - -"
             ];
             services.squid = mkMerge [
               cfg.modules.services.squid
               {
                 enable = true;
-                configFile = null;
+                configText = null;
               }
-              (mkIf cfg.egress-restristion.enable {
+              (mkIf cfg.egress-restriction.enable {
                 extraConfig = mkBefore ''
                   acl my_squid_connect method CONNECT
                   acl my_squid_https_port port 443
-                  ${optionalString (cfg.egress-restristion.fqdns != []) ''
-                    acl my_squid_allowed_fqdns dstdomain -n ${concatStringsSep " " cfg.egress-restristion.fqdns}
+                  ${optionalString (cfg.egress-restriction.fqdns != []) ''
+                    acl my_squid_allowed_fqdns dstdomain -n ${concatStringsSep " " cfg.egress-restriction.fqdns}
                   ''}
 
                   http_access deny !my_squid_connect
                   http_access deny my_squid_connect !my_squid_https_port
-                  ${optionalString (cfg.egress-restristion.fqdns != []) ''
+                  ${optionalString (cfg.egress-restriction.fqdns != []) ''
                     http_access deny my_squid_connect my_squid_https_port !my_squid_allowed_fqdns
                     http_access allow my_squid_connect my_squid_https_port my_squid_allowed_fqdns
                   ''}
                 '';
               })
             ];
+            systemd.services.squid.serviceConfig = {
+              NoNewPrivileges = true;
+              PrivateTmp = true;
+              PrivateDevices = true;
+              PrivateIPC = true;
+              ProtectSystem = "strict";
+              ProtectHome = true;
+              ProtectClock = true;
+              ProtectControlGroups = true;
+              ProtectHostname = true;
+              ProtectKernelLogs = true;
+              ProtectKernelModules = true;
+              ProtectKernelTunables = true;
+              ProtectProc = "invisible";
+              ReadWritePaths = [
+                "/var/cache/squid"
+                "/var/log/squid"
+                "/run"
+              ];
+              NoExecPaths = [
+                "/var/cache/squid"
+                "/var/log/squid"
+              ];
+              CapabilityBoundingSet = [
+                "CAP_CHOWN"
+                "CAP_DAC_OVERRIDE"
+                "CAP_FOWNER"
+                "CAP_KILL"
+                "CAP_NET_BIND_SERVICE"
+                "CAP_NET_RAW"
+                "CAP_SETGID"
+                "CAP_SETUID"
+              ];
+              AmbientCapabilities = "";
+              KeyringMode = "private";
+              LimitCORE = 0;
+              LockPersonality = true;
+              MemoryDenyWriteExecute = true;
+              RemoveIPC = true;
+              RestrictAddressFamilies = [
+                "AF_INET"
+                "AF_INET6"
+                "AF_UNIX"
+                "AF_NETLINK"
+              ];
+              RestrictNamespaces = true;
+              RestrictRealtime = true;
+              RestrictSUIDSGID = true;
+              SystemCallArchitectures = "native";
+              SystemCallFilter = ["@system-service"];
+              SystemCallErrorNumber = "EPERM";
+              UMask = "0077";
+            };
           };
         };
       })
       enabled);
-    myOpt.systemd-socket-proxyd = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.systemd-socket-proxyd-id} = {
+    myOpt.systemd-socket-proxyd = mkMerge (mapAttrsToList (name: cfg: {
+        ${name} = {
           origin = {
             serviceName = "container@${cfg.container.name}";
             host = cfg.modules.services.squid.proxyAddress;
@@ -138,7 +191,7 @@ in {
           };
           proxy = {
             inherit (cfg.proxy) serviceName;
-            ip-socket = cfg.proxy.unixSocket;
+            ip-socket = cfg.proxy.unix-socket;
           };
         };
       })
