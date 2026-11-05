@@ -76,14 +76,6 @@ in {
         package = mkOption {
           type = types.package;
         };
-        host = mkOption {
-          type = types.singleLineStr;
-          default = "::1";
-          readOnly = true;
-        };
-        port = mkOption {
-          type = types.port;
-        };
         extraConfig = mkOption {
           type = types.lines;
         };
@@ -94,37 +86,81 @@ in {
         egress-restriction = {
           enable = mkOption {
             type = types.bool;
+            default = true;
           };
           fqdns = mkOption {
             type = types.listOf (types.strMatching "^\\.?([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$");
           };
         };
         tcp-to-unix = {
-          proxy.serviceName = mkOption {
-            type = types.singleLineStr;
-            default = "squid-${name}-tcp-to-unix";
+          origin = {
+            serviceName = mkOption {
+              type = types.singleLineStr;
+              default = cfg.serviceName;
+              readOnly = true;
+            };
+            host = mkOption {
+              type = types.singleLineStr;
+              default = "::1";
+              readOnly = true;
+            };
+            port = mkOption {
+              type = types.port;
+            };
           };
-          proxy.ip-socket = mkOption {
-            type = types.strMatching "^/run/[^/]+/.*[^/]$";
+          proxy = {
+            serviceName = mkOption {
+              type = types.singleLineStr;
+              default = "squid-${name}-tcp-to-unix";
+            };
+            ip-socket = mkOption {
+              type = types.strMatching "^/run/[^/]+/.*[^/]$";
+            };
           };
         };
         unix-to-tcp = {
-          proxy.serviceName = mkOption {
-            type = types.singleLineStr;
-            default = "squid-${name}-unix-to-tcp";
+          origin = {
+            serviceName = mkOption {
+              type = types.singleLineStr;
+              default = cfg.tcp-to-unix.proxy.serviceName;
+              readOnly = true;
+            };
+            ip-socket = mkOption {
+              type = types.strMatching "^/run/[^/]+/.*[^/]$";
+              default = cfg.tcp-to-unix.proxy.ip-socket;
+              readOnly = true;
+            };
+          };
+          proxy = {
+            serviceName = mkOption {
+              type = types.singleLineStr;
+              default = "squid-${name}-unix-to-tcp";
+            };
+            port = mkOption {
+              type = types.port;
+            };
+            host = mkOption {
+              type = types.host;
+              default = "::1";
+              readOnly = true;
+            };
           };
         };
         environment = {
           HTTP_PROXY = mkOption {
-            type = types.singleLineStr;
+            type = types.strMatch "^http.+[^/]$";
+            defualt = "http://[${cfg.unix-to-tcp.host}]:${cfg.unix-to-tcp.port}";
             readOnly = true;
           };
           HTTPS_PROXY = mkOption {
-            type = types.singleLineStr;
+            type = types.strMatch "^http.+[^/]$";
+            default = cfg.environment.HTTP_PROXY;
             readOnly = true;
           };
           NO_PROXY = mkOption {
             type = types.singleLineStr;
+            default = "localhost,127.0.0.1,::1";
+            readOnly = true;
           };
         };
         set-env-vars = mkOption {
@@ -259,34 +295,6 @@ in {
           inherit (cfg) environment;
         })))
         enabled));
-
-    myOpt.systemd-socket-proxyd =
-      mapAttrs (name: cfg: {
-        origin = {
-          serviceName = cfg.serviceName;
-          host = cfg.host;
-          port = cfg.port;
-        };
-        proxy = {
-          inherit (cfg.tcp-to-unix) serviceName;
-          ip-socket = cfg.tcp-to-unix.unix-socket;
-        };
-      })
-      enabled;
-
-    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.sleep-on-idle.id}.set-cgroup-parent = {
-          systemd-services = [
-            cfg.serviceName
-            cfg.tcp-to-unix.proxy.serviceName
-            cfg.unix-to-tcp.proxy.serviceName
-          ];
-          nixos-containers = [];
-          oci-containers = [];
-        };
-      })
-      enabled);
-
     virtualisation.oci-containers.containers = mkMerge (
       mapAttrsToList (_: cfg: (genAttrs cfg.set-env-vars.oci-containers (_: {
         inherit (cfg) environment;
@@ -299,5 +307,31 @@ in {
       })))
       enabled
     );
+
+    myOpt.systemd-socket-proxyd = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.tcp-to-unix.proxy.name} = cfg.tcp-to-unix;
+        ${cfg.unix-to-tcp.proxy.name} = cfg.unix-to-tcp;
+      })
+      enabled);
+
+    myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.netns-id}.set-network-namespace = {
+          systemd-services = [
+            cfg.unix-to-tcp.proxy.serviceName
+          ];
+        };
+      })
+      enabled);
+
+    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
+          systemd-services = [
+            cfg.serviceName
+            cfg.tcp-to-unix.proxy.serviceName
+            cfg.unix-to-tcp.proxy.serviceName
+          ];
+        };
+      })
+      enabled);
   };
 }
