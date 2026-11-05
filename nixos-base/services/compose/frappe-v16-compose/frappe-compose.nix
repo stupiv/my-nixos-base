@@ -73,8 +73,6 @@ in {
       ])
       enabled);
 
-    virtualisation.oci-containers.backend = "podman";
-
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
         ${name}.set-network-namespace = {
           oci-containers = mk-container-names cfg;
@@ -118,7 +116,6 @@ in {
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
         "d ${cfg.frappe.sitesDir} 0770 1000 0 - -"
-        "d ${cfg.frappe.sitesDir}/assets 0770 1000 0 - -"
         "d ${cfg.frappe.logsDir} 0770 1000 0 - -"
         "d ${cfg.frappe.backend.socket-folder} 0750 1000 0 - -"
         "d ${cfg.mariadb.stateDir} 0700 999 999 - -"
@@ -131,6 +128,7 @@ in {
       ])
       enabled);
 
+    virtualisation.oci-containers.backend = "podman";
     systemd.services = mkMerge (mapAttrsToList (name: cfg: (let
         configuratorUnit = "${outerCfg.virtualisation.oci-containers.containers.${cfg.frappe.configurator.containerName}.serviceName}.service";
       in {
@@ -158,309 +156,315 @@ in {
         };
       }))
       enabled);
-
     virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (
         name: cfg: let
-          common_hardening_options = [
-            "--cap-drop=ALL"
-            "--security-opt=no-new-privileges"
-            "--image-volume=ignore"
-            "--ipc=private"
-            "--pid=private"
-            "--uts=private"
-            "--cgroupns=private"
-            "--ulimit=core=0:0"
+          oci-base = [
+            {
+              autoStart = false;
+              extraOptions = [
+                "--cap-drop=ALL"
+                "--security-opt=no-new-privileges"
+                "--image-volume=ignore"
+                "--ipc=private"
+                "--pid=private"
+                "--uts=private"
+                "--cgroupns=private"
+                "--ulimit=core=0:0"
+              ];
+            }
           ];
-          valkey_base = {
-            autoStart = false;
-            inherit (cfg.valkey) image;
-            user = "999:0";
-            extraOptions =
-              common_hardening_options
-              ++ [
-                "--pids-limit=256"
-                "--umask=0007"
-              ];
-          };
-          frappe_base = {
-            autoStart = false;
-            inherit (cfg.frappe.base) image;
-            user = "frappe";
-            workdir = in-container-bench-dir;
-            extraOptions =
-              common_hardening_options
-              ++ [
-                "--group-add=0"
-                "--pids-limit=512"
-                "--umask=0007"
-              ];
-            volumes = [
-              "${cfg.frappe.benchDir}:${in-container-bench-dir}:O"
-              "${cfg.frappe.benchDir}${assets-path}:${in-container-bench-dir}${assets-path}:ro,noexec,nosuid,nodev"
+          valkey-base =
+            oci-base
+            ++ [
+              {
+                inherit (cfg.valkey) image;
+                user = "999:0";
+                extraOptions = [
+                  "--pids-limit=256"
+                  "--umask=0007"
+                ];
+              }
             ];
-          };
-          frappe_rw_state_volumes = [
+          frappe-base =
+            oci-base
+            ++ [
+              {
+                inherit (cfg.frappe.base) image;
+                user = "frappe";
+                workdir = in-container-bench-dir;
+                extraOptions = [
+                  "--group-add=0"
+                  "--pids-limit=512"
+                  "--umask=0007"
+                ];
+                volumes = [
+                  "${cfg.frappe.benchDir}:${in-container-bench-dir}:O"
+                  "${cfg.frappe.benchDir}${assets-path}:${in-container-bench-dir}${assets-path}:ro,noexec,nosuid,nodev"
+                ];
+              }
+            ];
+          frappe-rw-state-volumes = [
             "${cfg.frappe.sitesDir}:${in-container-sites-dir}:rw,noexec,nosuid,nodev"
             "${cfg.frappe.logsDir}:${in-container-logs-dir}:rw,noexec,nosuid,nodev"
           ];
-          frappe_ro_sites_volumes = [
+          frappe-ro-sites-volumes = [
             "${cfg.frappe.sitesDir}:${in-container-sites-dir}:ro,noexec,nosuid,nodev"
           ];
-          frappe_valkey_socket_volumes = [
+          frappe-valkey-socket-volumes = [
             "${cfg.valkey.cache.socket-folder}:${in-container-valkey-cache-socket-folder}:ro,noexec,nosuid,nodev"
             "${cfg.valkey.queue.socket-folder}:${in-container-valkey-queue-socket-folder}:ro,noexec,nosuid,nodev"
           ];
-          frappe_db_and_valkey_socket_volumes =
+          frappe-db-and-valkey-socket-volumes =
             [
               "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}:ro,noexec,nosuid,nodev"
             ]
-            ++ frappe_valkey_socket_volumes;
+            ++ frappe-valkey-socket-volumes;
         in {
-          ${cfg.mariadb.containerName} = {
-            autoStart = false;
-            inherit (cfg.mariadb) image;
-            user = "999:999";
-            environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
-            environment.MARIADB_AUTO_UPGRADE = "1";
-            extraOptions =
-              common_hardening_options
-              ++ [
-                "--pids-limit=512"
-                "--umask=0027"
-              ];
-            cmd = [
-              "--skip-networking"
-              "--socket=${mariadb-socket}"
-              "--character-set-server=utf8mb4"
-              "--collation-server=utf8mb4_unicode_ci"
-              "--skip-character-set-client-handshake"
-            ];
-            volumes = [
-              "${cfg.mariadb.stateDir}:${in-container-mariadb-data-dir}:rw,noexec,nosuid,nodev"
-              "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}:rw,noexec,nosuid,nodev"
-            ];
-          };
-
-          ${cfg.valkey.cache.containerName} = mkMerge [
-            valkey_base
-            {
-              entrypoint = "sh";
-              cmd = [
-                "-c"
-                "exec redis-server --port 0 --unixsocket ${valkey-cache-socket} --unixsocketperm 770 --save ''"
-              ];
-              volumes = [
-                "${cfg.valkey.cache.socket-folder}:${in-container-valkey-cache-socket-folder}:rw,noexec,nosuid,nodev"
-              ];
-            }
-          ];
-
-          ${cfg.valkey.queue.containerName} = mkMerge [
-            valkey_base
-            {
-              entrypoint = "sh";
-              cmd = [
-                "-c"
-                "exec redis-server --port 0 --unixsocket ${valkey-queue-socket} --unixsocketperm 770 --dir ${in-container-valkey-data-dir}"
-              ];
-              volumes = [
-                "${cfg.valkey.queue.stateDir}:${in-container-valkey-data-dir}:rw,noexec,nosuid,nodev"
-                "${cfg.valkey.queue.socket-folder}:${in-container-valkey-queue-socket-folder}:rw,noexec,nosuid,nodev"
-              ];
-            }
-          ];
-
-          ${cfg.frappe.create-site.containerName} = mkMerge [
-            frappe_base
-            {
-              dependsOn = [cfg.frappe.configurator.containerName];
-              entrypoint = "bash";
-              environmentFiles = optionals (!cfg.frappe.readOnlyMode) [
-                config.sops.secrets.${cfg.frappe.envfile-key}.path
-              ];
-              environment = {
-                SITE = cfg.frappe.siteName;
-                MARIADB_SOCKET = mariadb-socket;
-                VALKEY_CACHE_SOCKET = valkey-cache-socket;
-                VALKEY_QUEUE_SOCKET = valkey-queue-socket;
-                READONLY =
-                  if cfg.frappe.readOnlyMode
-                  then "1"
-                  else "0";
-              };
-              volumes =
-                (
-                  if cfg.frappe.readOnlyMode
-                  then frappe_ro_sites_volumes
-                  else frappe_rw_state_volumes
-                )
-                ++ frappe_db_and_valkey_socket_volumes
-                ++ [
-                  "${toString create-site-script}:/opt/create-site.sh:ro,nosuid,nodev"
-                ];
-              cmd = ["/opt/create-site.sh"];
-            }
-          ];
-
-          ${cfg.frappe.migrate.containerName} = let
-            enabledApps = attrNames (filterAttrs (_: appCfg: appCfg.enable) cfg.frappe.apps);
-          in
-            mkMerge [
-              frappe_base
+          ${cfg.mariadb.containerName} = mkMerge (oci-base
+            ++ [
               {
-                dependsOn = [cfg.frappe.create-site.containerName];
+                inherit (cfg.mariadb) image;
+                user = "999:999";
+                environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
+                environment.MARIADB_AUTO_UPGRADE = "1";
+                extraOptions = [
+                  "--pids-limit=512"
+                  "--umask=0027"
+                ];
+                cmd = [
+                  "--skip-networking"
+                  "--socket=${mariadb-socket}"
+                  "--character-set-server=utf8mb4"
+                  "--collation-server=utf8mb4_unicode_ci"
+                  "--skip-character-set-client-handshake"
+                ];
+                volumes = [
+                  "${cfg.mariadb.stateDir}:${in-container-mariadb-data-dir}:rw,noexec,nosuid,nodev"
+                  "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}:rw,noexec,nosuid,nodev"
+                ];
+              }
+            ]);
+
+          ${cfg.valkey.cache.containerName} = mkMerge (valkey-base
+            ++ [
+              {
+                entrypoint = "sh";
+                cmd = [
+                  "-c"
+                  "exec redis-server --port 0 --unixsocket ${valkey-cache-socket} --unixsocketperm 770 --save ''"
+                ];
+                volumes = [
+                  "${cfg.valkey.cache.socket-folder}:${in-container-valkey-cache-socket-folder}:rw,noexec,nosuid,nodev"
+                ];
+              }
+            ]);
+
+          ${cfg.valkey.queue.containerName} = mkMerge (valkey-base
+            ++ [
+              {
+                entrypoint = "sh";
+                cmd = [
+                  "-c"
+                  "exec redis-server --port 0 --unixsocket ${valkey-queue-socket} --unixsocketperm 770 --dir ${in-container-valkey-data-dir}"
+                ];
+                volumes = [
+                  "${cfg.valkey.queue.stateDir}:${in-container-valkey-data-dir}:rw,noexec,nosuid,nodev"
+                  "${cfg.valkey.queue.socket-folder}:${in-container-valkey-queue-socket-folder}:rw,noexec,nosuid,nodev"
+                ];
+              }
+            ]);
+
+          ${cfg.frappe.create-site.containerName} = mkMerge (frappe-base
+            ++ [
+              {
+                dependsOn = [cfg.frappe.configurator.containerName];
                 entrypoint = "bash";
+                environmentFiles = optionals (!cfg.frappe.readOnlyMode) [
+                  config.sops.secrets.${cfg.frappe.envfile-key}.path
+                ];
                 environment = {
                   SITE = cfg.frappe.siteName;
-                  APPS = concatStringsSep " " enabledApps;
+                  MARIADB_SOCKET = mariadb-socket;
+                  VALKEY_CACHE_SOCKET = valkey-cache-socket;
+                  VALKEY_QUEUE_SOCKET = valkey-queue-socket;
                   READONLY =
                     if cfg.frappe.readOnlyMode
                     then "1"
                     else "0";
                 };
                 volumes =
-                  optionals (!cfg.frappe.readOnlyMode) (
-                    frappe_rw_state_volumes
-                    ++ frappe_db_and_valkey_socket_volumes
+                  (
+                    if cfg.frappe.readOnlyMode
+                    then frappe-ro-sites-volumes
+                    else frappe-rw-state-volumes
                   )
+                  ++ frappe-db-and-valkey-socket-volumes
                   ++ [
-                    "${toString migrate-script}:/opt/migrate.sh:ro,nosuid,nodev"
+                    "${toString create-site-script}:/opt/create-site.sh:ro,nosuid,nodev"
                   ];
-                cmd = ["/opt/migrate.sh"];
+                cmd = ["/opt/create-site.sh"];
               }
-            ];
+            ]);
 
-          ${cfg.frappe.configurator.containerName} = mkMerge [
-            frappe_base
-            {
-              dependsOn = [
-                cfg.mariadb.containerName
-                cfg.valkey.cache.containerName
-                cfg.valkey.queue.containerName
-              ];
-              entrypoint = "bash";
-              environment = {
-                MARIADB_SERVICE = "localhost";
-                MARIADB_SOCKET = mariadb-socket;
-                VALKEY_CACHE_SOCKET = valkey-cache-socket;
-                VALKEY_QUEUE_SOCKET = valkey-queue-socket;
-                SOCKETIO_PORT = socketio_port;
-                MAINTENANCE_MODE =
-                  if cfg.frappe.readOnlyMode
-                  then "1"
-                  else "0";
-                ALLOW_READS_DURING_MAINTENANCE =
-                  if cfg.frappe.readOnlyMode
-                  then "1"
-                  else "0";
-                HOST_NAME = "https://${cfg.modules.proxy-compose.hostname}";
-              };
-              volumes =
-                frappe_rw_state_volumes
-                ++ [
-                  "${toString configurator-script}:/opt/configurator.sh:ro,nosuid,nodev"
+          ${cfg.frappe.migrate.containerName} = let
+            enabledApps = attrNames (filterAttrs (_: appCfg: appCfg.enable) cfg.frappe.apps);
+          in
+            mkMerge (frappe-base
+              ++ [
+                {
+                  dependsOn = [cfg.frappe.create-site.containerName];
+                  entrypoint = "bash";
+                  environment = {
+                    SITE = cfg.frappe.siteName;
+                    APPS = concatStringsSep " " enabledApps;
+                    READONLY =
+                      if cfg.frappe.readOnlyMode
+                      then "1"
+                      else "0";
+                  };
+                  volumes =
+                    optionals (!cfg.frappe.readOnlyMode) (
+                      frappe-rw-state-volumes
+                      ++ frappe-db-and-valkey-socket-volumes
+                    )
+                    ++ [
+                      "${toString migrate-script}:/opt/migrate.sh:ro,nosuid,nodev"
+                    ];
+                  cmd = ["/opt/migrate.sh"];
+                }
+              ]);
+
+          ${cfg.frappe.configurator.containerName} = mkMerge (frappe-base
+            ++ [
+              {
+                dependsOn = [
+                  cfg.mariadb.containerName
+                  cfg.valkey.cache.containerName
+                  cfg.valkey.queue.containerName
                 ];
-              cmd = ["/opt/configurator.sh"];
-            }
-          ];
+                entrypoint = "bash";
+                environment = {
+                  MARIADB_SERVICE = "localhost";
+                  MARIADB_SOCKET = mariadb-socket;
+                  VALKEY_CACHE_SOCKET = valkey-cache-socket;
+                  VALKEY_QUEUE_SOCKET = valkey-queue-socket;
+                  SOCKETIO_PORT = socketio_port;
+                  MAINTENANCE_MODE =
+                    if cfg.frappe.readOnlyMode
+                    then "1"
+                    else "0";
+                  ALLOW_READS_DURING_MAINTENANCE =
+                    if cfg.frappe.readOnlyMode
+                    then "1"
+                    else "0";
+                  HOST_NAME = "https://${cfg.modules.proxy-compose.hostname}";
+                };
+                volumes =
+                  frappe-rw-state-volumes
+                  ++ [
+                    "${toString configurator-script}:/opt/configurator.sh:ro,nosuid,nodev"
+                  ];
+                cmd = ["/opt/configurator.sh"];
+              }
+            ]);
 
-          ${cfg.frappe.backend.containerName} = mkMerge [
-            frappe_base
-            {
-              dependsOn = [cfg.frappe.migrate.containerName];
-              volumes =
-                frappe_rw_state_volumes
-                ++ frappe_db_and_valkey_socket_volumes
-                ++ [
-                  "${cfg.frappe.backend.socket-folder}:${in-container-frappe-socket-folder}:rw,noexec,nosuid,nodev"
+          ${cfg.frappe.backend.containerName} = mkMerge (frappe-base
+            ++ [
+              {
+                dependsOn = [cfg.frappe.migrate.containerName];
+                volumes =
+                  frappe-rw-state-volumes
+                  ++ frappe-db-and-valkey-socket-volumes
+                  ++ [
+                    "${cfg.frappe.backend.socket-folder}:${in-container-frappe-socket-folder}:rw,noexec,nosuid,nodev"
+                  ];
+                cmd = [
+                  "/home/frappe/frappe-bench/env/bin/gunicorn"
+                  "--chdir=${in-container-sites-dir}"
+                  "--bind"
+                  "unix:${frappe-socket}"
+                  "--umask=007"
+                  "--threads=4"
+                  "--workers=2"
+                  "--worker-class=gthread"
+                  "--worker-tmp-dir=/dev/shm"
+                  "--timeout=120"
+                  "--preload"
+                  "frappe.app:application"
                 ];
-              cmd = [
-                "/home/frappe/frappe-bench/env/bin/gunicorn"
-                "--chdir=${in-container-sites-dir}"
-                "--bind"
-                "unix:${frappe-socket}"
-                "--umask=007"
-                "--threads=4"
-                "--workers=2"
-                "--worker-class=gthread"
-                "--worker-tmp-dir=/dev/shm"
-                "--timeout=120"
-                "--preload"
-                "frappe.app:application"
-              ];
-            }
-          ];
+              }
+            ]);
 
-          ${cfg.frappe.queue-long.containerName} = mkMerge [
-            frappe_base
-            {
-              dependsOn = [cfg.frappe.migrate.containerName];
-              volumes =
-                frappe_rw_state_volumes
-                ++ frappe_db_and_valkey_socket_volumes;
-              cmd = ["bench" "worker" "--queue" "long,default,short"];
-            }
-          ];
+          ${cfg.frappe.queue-long.containerName} = mkMerge (frappe-base
+            ++ [
+              {
+                dependsOn = [cfg.frappe.migrate.containerName];
+                volumes =
+                  frappe-rw-state-volumes
+                  ++ frappe-db-and-valkey-socket-volumes;
+                cmd = ["bench" "worker" "--queue" "long,default,short"];
+              }
+            ]);
 
-          ${cfg.frappe.queue-short.containerName} = mkMerge [
-            frappe_base
-            {
-              dependsOn = [cfg.frappe.migrate.containerName];
-              volumes =
-                frappe_rw_state_volumes
-                ++ frappe_db_and_valkey_socket_volumes;
-              cmd = ["bench" "worker" "--queue" "short,default"];
-            }
-          ];
+          ${cfg.frappe.queue-short.containerName} = mkMerge (frappe-base
+            ++ [
+              {
+                dependsOn = [cfg.frappe.migrate.containerName];
+                volumes =
+                  frappe-rw-state-volumes
+                  ++ frappe-db-and-valkey-socket-volumes;
+                cmd = ["bench" "worker" "--queue" "short,default"];
+              }
+            ]);
 
-          ${cfg.frappe.scheduler.containerName} = mkMerge [
-            frappe_base
-            {
-              dependsOn = [cfg.frappe.migrate.containerName];
-              volumes =
-                frappe_rw_state_volumes
-                ++ frappe_db_and_valkey_socket_volumes;
-              cmd = ["bench" "schedule"];
-            }
-          ];
+          ${cfg.frappe.scheduler.containerName} = mkMerge (frappe-base
+            ++ [
+              {
+                dependsOn = [cfg.frappe.migrate.containerName];
+                volumes =
+                  frappe-rw-state-volumes
+                  ++ frappe-db-and-valkey-socket-volumes;
+                cmd = ["bench" "schedule"];
+              }
+            ]);
 
-          ${cfg.frappe.websocket.containerName} = mkMerge [
-            frappe_base
-            {
-              dependsOn = [cfg.frappe.migrate.containerName];
-              volumes =
-                frappe_ro_sites_volumes
-                ++ frappe_valkey_socket_volumes;
-              cmd = ["node" "/home/frappe/frappe-bench/apps/frappe/socketio.js"];
-            }
-          ];
+          ${cfg.frappe.websocket.containerName} = mkMerge (frappe-base
+            ++ [
+              {
+                dependsOn = [cfg.frappe.migrate.containerName];
+                volumes =
+                  frappe-ro-sites-volumes
+                  ++ frappe-valkey-socket-volumes;
+                cmd = ["node" "/home/frappe/frappe-bench/apps/frappe/socketio.js"];
+              }
+            ]);
 
-          ${cfg.frappe.frontend.containerName} = mkMerge [
-            frappe_base
-            {
-              dependsOn = [
-                cfg.frappe.backend.containerName
-                cfg.frappe.websocket.containerName
-              ];
-              cmd = ["nginx-entrypoint.sh"];
-              volumes =
-                frappe_ro_sites_volumes
-                ++ [
-                  "${cfg.frappe.backend.socket-folder}:${in-container-frappe-socket-folder}:ro,noexec,nosuid,nodev"
+          ${cfg.frappe.frontend.containerName} = mkMerge (frappe-base
+            ++ [
+              {
+                dependsOn = [
+                  cfg.frappe.backend.containerName
+                  cfg.frappe.websocket.containerName
                 ];
-              environment = {
-                BACKEND = "unix:${frappe-socket}";
-                FRAPPE_SITE_NAME_HEADER = cfg.frappe.siteName;
-                NGINX_LISTEN_PORT = "127.0.0.1:8080";
-                SOCKETIO = "127.0.0.1:${socketio_port}";
-                UPSTREAM_REAL_IP_ADDRESS = "127.0.0.1";
-                UPSTREAM_REAL_IP_HEADER = "X-Forwarded-For";
-                UPSTREAM_REAL_IP_RECURSIVE = "off";
-                PROXY_READ_TIMEOUT = "120";
-                CLIENT_MAX_BODY_SIZE = "50m";
-              };
-            }
-          ];
+                cmd = ["nginx-entrypoint.sh"];
+                volumes =
+                  frappe-ro-sites-volumes
+                  ++ [
+                    "${cfg.frappe.backend.socket-folder}:${in-container-frappe-socket-folder}:ro,noexec,nosuid,nodev"
+                  ];
+                environment = {
+                  BACKEND = "unix:${frappe-socket}";
+                  FRAPPE_SITE_NAME_HEADER = cfg.frappe.siteName;
+                  NGINX_LISTEN_PORT = "127.0.0.1:8080";
+                  SOCKETIO = "127.0.0.1:${socketio_port}";
+                  UPSTREAM_REAL_IP_ADDRESS = "127.0.0.1";
+                  UPSTREAM_REAL_IP_HEADER = "X-Forwarded-For";
+                  UPSTREAM_REAL_IP_RECURSIVE = "off";
+                  PROXY_READ_TIMEOUT = "120";
+                  CLIENT_MAX_BODY_SIZE = "50m";
+                };
+              }
+            ]);
         }
       )
       enabled);

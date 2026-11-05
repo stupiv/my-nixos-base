@@ -13,7 +13,6 @@
     ./postgresql.nix
     ./proxy-compose.nix
     ./rclone-automount.nix
-    ./searxng.nix
     ./squid.nix
     ./systemd-socket-proxyd.nix
     ./valkey.nix

@@ -120,9 +120,6 @@ in {
             [
               "--shm-size=2g" # Firefox needs real shared memory; the default 64MB is not enough
               "--read-only"
-              "--tmpfs=/tmp:rw,nosuid,nodev,size=512m"
-              "--tmpfs=/run:rw,noexec,nosuid,nodev,size=32m"
-              "--tmpfs=/root/.camofox:rw,noexec,nosuid,nodev,size=256m"
               "--cap-drop=ALL"
               "--security-opt=no-new-privileges"
               "--pids-limit=512"
