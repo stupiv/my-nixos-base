@@ -47,8 +47,15 @@ else
   USERNS_ARGS=("--userns=keep-id")
 fi
 
+HARDEN_ARGS=(
+  --cap-drop=ALL
+  --security-opt=no-new-privileges
+  --pids-limit=2048
+)
+
 podman run --rm \
   --name "frappe-bench-store-${SPEC_HASH}" \
+  "${HARDEN_ARGS[@]}" \
   -v "$work":/home/frappe/frappe-bench \
   -v "$(realpath "$APPS_JSON")":/opt/frappe/apps.json:ro \
   -v "$(realpath "$BENCH_INIT_SCRIPT")":/opt/bench-init.sh:ro \
