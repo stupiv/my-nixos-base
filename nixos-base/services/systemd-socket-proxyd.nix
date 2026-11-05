@@ -44,6 +44,8 @@ in {
           // {
             serviceName = mkOption {
               type = types.singleLineStr;
+              default = "systemd-socket-proxyd@${name}";
+              readOnly = true;
             };
           };
       };
@@ -51,29 +53,38 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    systemd.sockets =
-      mapAttrs' (_: cfg: (nameValuePair (cfg.proxy.serviceName) {
+    systemd.sockets = mkMerge ([
+      {
+        "systemd-socket-proxyd@" = {};
+      }
+    ] ++ mapAttrsToList (_: cfg: {
+      ${cfg.proxy.serviceName} = {
+        overrideStrategy = "asDropin";
         wantedBy = ["sockets.target"];
         listenStreams = [cfg.proxy.ip-socket];
-      }))
-      enabled;
-    systemd.services =
-      mapAttrs' (_: cfg: let
-        socketUnit = "${cfg.proxy.serviceName}.socket";
-        originUnit = "${cfg.origin.serviceName}.service";
-        systemd-socket-proxyd = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd";
-      in (
-        nameValuePair (cfg.proxy.serviceName) {
-          requires = [socketUnit originUnit];
-          after = [socketUnit originUnit];
-          serviceConfig = {
-            ExecStart = utils.escapeSystemdExecArgs [
-              systemd-socket-proxyd
-              cfg.origin.ip-socket
-            ];
-          };
-        }
-      ))
-      enabled;
+      };
+    }) enabled);
+
+    systemd.services = mkMerge ([
+      {
+        "systemd-socket-proxyd@" = {
+          requires = ["systemd-socket-proxyd@%i.socket"];
+          after = ["systemd-socket-proxyd@%i.socket"];
+        };
+      }
+    ] ++ mapAttrsToList (_: cfg: let
+      originUnit = "${cfg.origin.serviceName}.service";
+      systemd-socket-proxyd = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd";
+    in {
+      ${cfg.proxy.serviceName} = {
+        overrideStrategy = "asDropin";
+        requires = [originUnit];
+        after = [originUnit];
+        serviceConfig.ExecStart = utils.escapeSystemdExecArgs [
+          systemd-socket-proxyd
+          cfg.origin.ip-socket
+        ];
+      };
+    }) enabled);
   };
 }
