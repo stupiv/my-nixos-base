@@ -127,6 +127,11 @@ in {
             type = types.singleLineStr;
           };
         };
+        set-env-vars = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.netns.${cfg.netns-id}.set-network-namespace;
+          readOnly = true;
+        };
       };
     }));
   };
@@ -180,81 +185,80 @@ in {
       })
     enabled;
 
-    systemd.services = mkMerge [
-      {
-        "squid@" = {
-          after = ["network.target" "nss-lookup.target"];
-          unitConfig.ConditionPathExists = "/etc/squid/%i.conf";
-          environment.TMPDIR = "/run/squid-%i";
-          serviceConfig = {
-            Type = "notify";
-            NotifyAccess = "main";
-            DynamicUser = true;
-            User = "squid-%i";
-            Group = "squid-%i";
-            RuntimeDirectory = "squid-%i";
-            RuntimeDirectoryMode = "0700";
-            CacheDirectory = "squid-%i";
-            CacheDirectoryMode = "0700";
-            LogsDirectory = "squid-%i";
-            LogsDirectoryMode = "0700";
-            WorkingDirectory = "/var/cache/squid-%i";
-            NoExecPaths = ["/var/cache/squid-%i" "/var/log/squid-%i" "/run/squid-%i"];
-            ExecStartPre = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -n %i -z -f \${SQUID_CONFIG}";
-            ExecStart = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -C -n %i -f \${SQUID_CONFIG}";
-            ExecReload = [
-              "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -n %i -k parse -f \${SQUID_CONFIG}"
-              "${pkgs.coreutils}/bin/kill -HUP $MAINPID"
-            ];
-            KillMode = "mixed";
-            Restart = "on-failure";
-            NoNewPrivileges = true;
-            PrivateTmp = true;
-            PrivateDevices = true;
-            PrivateIPC = true;
-            ProtectSystem = "strict";
-            ProtectHome = true;
-            ProtectClock = true;
-            ProtectControlGroups = true;
-            ProtectHostname = true;
-            ProtectKernelLogs = true;
-            ProtectKernelModules = true;
-            ProtectKernelTunables = true;
-            ProtectProc = "invisible";
-            CapabilityBoundingSet = "";
-            AmbientCapabilities = "";
-            KeyringMode = "private";
-            LimitCORE = 0;
-            LockPersonality = true;
-            MemoryDenyWriteExecute = true;
-            RemoveIPC = true;
-            RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK"];
-            RestrictNamespaces = true;
-            RestrictRealtime = true;
-            RestrictSUIDSGID = true;
-            SystemCallArchitectures = "native";
-            SystemCallFilter = ["@system-service"];
-            SystemCallErrorNumber = "EPERM";
-            UMask = "0077";
+    systemd.services = mkMerge ([
+        {
+          "squid@" = {
+            after = ["network.target" "nss-lookup.target"];
+            unitConfig.ConditionPathExists = "/etc/squid/%i.conf";
+            environment.TMPDIR = "/run/squid-%i";
+            serviceConfig = {
+              Type = "notify";
+              NotifyAccess = "main";
+              DynamicUser = true;
+              User = "squid-%i";
+              Group = "squid-%i";
+              RuntimeDirectory = "squid-%i";
+              RuntimeDirectoryMode = "0700";
+              CacheDirectory = "squid-%i";
+              CacheDirectoryMode = "0700";
+              LogsDirectory = "squid-%i";
+              LogsDirectoryMode = "0700";
+              WorkingDirectory = "/var/cache/squid-%i";
+              NoExecPaths = ["/var/cache/squid-%i" "/var/log/squid-%i" "/run/squid-%i"];
+              ExecStartPre = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -n %i -z -f \${SQUID_CONFIG}";
+              ExecStart = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -C -n %i -f \${SQUID_CONFIG}";
+              ExecReload = [
+                "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -n %i -k parse -f \${SQUID_CONFIG}"
+                "${pkgs.coreutils}/bin/kill -HUP $MAINPID"
+              ];
+              KillMode = "mixed";
+              Restart = "on-failure";
+              NoNewPrivileges = true;
+              PrivateTmp = true;
+              PrivateDevices = true;
+              PrivateIPC = true;
+              ProtectSystem = "strict";
+              ProtectHome = true;
+              ProtectClock = true;
+              ProtectControlGroups = true;
+              ProtectHostname = true;
+              ProtectKernelLogs = true;
+              ProtectKernelModules = true;
+              ProtectKernelTunables = true;
+              ProtectProc = "invisible";
+              CapabilityBoundingSet = "";
+              AmbientCapabilities = "";
+              KeyringMode = "private";
+              LimitCORE = 0;
+              LockPersonality = true;
+              MemoryDenyWriteExecute = true;
+              RemoveIPC = true;
+              RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK"];
+              RestrictNamespaces = true;
+              RestrictRealtime = true;
+              RestrictSUIDSGID = true;
+              SystemCallArchitectures = "native";
+              SystemCallFilter = ["@system-service"];
+              SystemCallErrorNumber = "EPERM";
+              UMask = "0077";
+            };
           };
-        };
-      }
-      (mapAttrs' (name: cfg:
-        nameValuePair cfg.serviceName {
-          overrideStrategy = "asDropin";
-          restartTriggers = [configFiles.${name} cfg.package];
-          environment = {
-            SQUID_BINARY = "${cfg.package}/bin/squid";
-            SQUID_CONFIG = "/etc/squid/${name}.conf";
-          };
-          serviceConfig = {
-            CapabilityBoundingSet = optionalString (cfg.port < 1024) "CAP_NET_BIND_SERVICE";
-            AmbientCapabilities = optionalString (cfg.port < 1024) "CAP_NET_BIND_SERVICE";
-            RemainAfterExit = mkForce false;
-          };
-        })
-      enabled)
-    ];
+        }
+        (mapAttrs' (name: cfg:
+          nameValuePair cfg.serviceName {
+            overrideStrategy = "asDropin";
+            restartTriggers = [configFiles.${name} cfg.package];
+            environment = {
+              SQUID_BINARY = "${cfg.package}/bin/squid";
+              SQUID_CONFIG = "/etc/squid/${name}.conf";
+            };
+          })
+        enabled)
+      ]
+      ++ (mapAttrsToList (_: cfg: (genAttrs cfg.set-env-vars.systemd-services (_: {
+          inherit (cfg) environment;
+        })))
+        enabled));
 
     myOpt.systemd-socket-proxyd =
       mapAttrs (name: cfg: {
@@ -272,11 +276,28 @@ in {
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sleep-on-idle.id}.set-cgroup-parent = {
-          systemd-services = [cfg.tcp-to-unix.serviceName cfg.serviceName];
+          systemd-services = [
+            cfg.serviceName
+            cfg.tcp-to-unix.proxy.serviceName
+            cfg.unix-to-tcp.proxy.serviceName
+          ];
           nixos-containers = [];
           oci-containers = [];
         };
       })
       enabled);
+
+    virtualisation.oci-containers.containers = mkMerge (
+      mapAttrsToList (_: cfg: (genAttrs cfg.set-env-vars.oci-containers (_: {
+        inherit (cfg) environment;
+      })))
+      enabled
+    );
+    containers = mkMerge (
+      mapAttrsToList (_: cfg: (genAttrs cfg.set-env-vars.nixos-containers (_: {
+        config.environment.variables = cfg.environment;
+      })))
+      enabled
+    );
   };
 }

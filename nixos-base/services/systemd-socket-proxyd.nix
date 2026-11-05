@@ -44,7 +44,6 @@ in {
           // {
             serviceName = mkOption {
               type = types.singleLineStr;
-              default = "${cfg.origin.serviceName}-proxy";
             };
           };
       };
