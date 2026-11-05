@@ -61,18 +61,6 @@
         "type": "github"
       }
     },
-    "functional_blocklist": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-Z7SOyoyHrbIsd/DneiX+AzrzDlz/Sl2tlVmnGfvbbpA=",
-        "type": "file",
-        "url": "https://big.oisd.nl/domainswild2"
-      },
-      "original": {
-        "type": "file",
-        "url": "https://big.oisd.nl/domainswild2"
-      }
-    },
     "hermes-agent": {
       "inputs": {
         "flake-parts": "flake-parts_2",
@@ -265,6 +253,22 @@
         "type": "github"
       }
     },
+    "oisd": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793899122,
+        "narHash": "sha256-QcsDfwhx2oE91KWCZie9kW+nXdqmfbP3KSQwX74rVdQ=",
+        "owner": "sjhgvr",
+        "repo": "oisd",
+        "rev": "2d715db65a1e73f4d7da182e31e1650a378fcf5e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sjhgvr",
+        "repo": "oisd",
+        "type": "github"
+      }
+    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -319,7 +323,6 @@
       "inputs": {
         "disko": "disko",
         "flake-parts": "flake-parts",
-        "functional_blocklist": "functional_blocklist",
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager_2",
         "nix-flatpak": "nix-flatpak",
@@ -330,6 +333,7 @@
         ],
         "nixpkgs-2605": "nixpkgs-2605",
         "nixpkgs-2611": "nixpkgs-2611",
+        "oisd": "oisd",
         "sops-nix": "sops-nix",
         "zen-browser-flake": "zen-browser-flake"
       }

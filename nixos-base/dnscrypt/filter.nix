@@ -1,5 +1,5 @@
 {inputs, ...}: {
   myOpt.dnscrypt.filter = ''
-    ${builtins.readFile inputs.functional_blocklist}
+    ${builtins.readFile (inputs.oisd + /domainswild_big.txt)}
   '';
 }

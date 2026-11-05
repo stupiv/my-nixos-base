@@ -22,10 +22,6 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    functional_blocklist = {
-      url = "https://big.oisd.nl/domainswild2";
-      flake = false;
-    };
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -41,6 +37,10 @@
     nixos-hardware = {
       url = "github:NixOS/nixos-hardware";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    oisd = {
+      url = "github:sjhgvr/oisd";
+      flake = false;
     };
   };
   outputs = inputs: (inputs.flake-parts.lib.mkFlake {inherit inputs;} {
