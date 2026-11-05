@@ -67,6 +67,46 @@ in {
               };
             }
           ];
+          systemd.services.keycloak.serviceConfig = {
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            PrivateDevices = true;
+            PrivateIPC = true;
+            PrivateMounts = true;
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            ProtectClock = true;
+            ProtectControlGroups = true;
+            ProtectHostname = true;
+            ProtectKernelLogs = true;
+            ProtectKernelModules = true;
+            ProtectKernelTunables = true;
+            ProtectProc = "invisible";
+            DevicePolicy = "closed";
+            DeviceAllow = "";
+            CapabilityBoundingSet = ["CAP_NET_BIND_SERVICE"];
+            KeyringMode = "private";
+            LimitCORE = 0;
+            LockPersonality = true;
+            RemoveIPC = true;
+            RestrictAddressFamilies = [
+              "AF_INET"
+              "AF_INET6"
+              "AF_UNIX"
+              "AF_NETLINK"
+            ];
+            RestrictNamespaces = true;
+            RestrictRealtime = true;
+            RestrictSUIDSGID = true;
+            SystemCallArchitectures = "native";
+            SystemCallFilter = [
+              "@system-service"
+              "mincore"
+              "~@privileged"
+            ];
+            SystemCallErrorNumber = "EPERM";
+            UMask = "0077";
+          };
         };
       })
       enabled);
