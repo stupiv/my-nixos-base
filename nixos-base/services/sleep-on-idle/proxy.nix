@@ -15,7 +15,6 @@ in {
   config = mkIf (enabled != {}) {
     systemd.services = mkMerge [
       {
-        # ExecStart is supplied by each instance drop-in.
         "sleep-on-idle-proxy@" = {};
       }
       (concatMapAttrs (name1: cfg1: let
