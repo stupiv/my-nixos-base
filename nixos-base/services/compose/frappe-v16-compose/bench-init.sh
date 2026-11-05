@@ -14,7 +14,7 @@ set -euo pipefail
 
 bench init --ignore-exist --apps_path=/opt/frappe/apps.json \
   --frappe-branch "$FRAPPE_BRANCH" --no-procfile --no-backups \
-  --skip-redis-config-generation --verbose /home/frappe/frappe-bench
+  --skip-redis-config-generation /home/frappe/frappe-bench
 cd /home/frappe/frappe-bench
 echo '{}' > sites/common_site_config.json
 find apps -mindepth 1 -path '*/.git' -prune -exec rm -rf {} +
