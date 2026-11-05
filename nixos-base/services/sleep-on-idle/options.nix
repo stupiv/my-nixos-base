@@ -53,7 +53,8 @@ in {
                 // {
                   name = mkOption {
                     type = types.singleLineStr;
-                    default = "${cfg.sliceName}-proxy-${endPointArgs.name}";
+                    default = "sleep-on-idle-proxy@${cfg.sliceName}-${endPointArgs.name}";
+                    readOnly = true;
                   };
                 };
             };
@@ -84,7 +85,8 @@ in {
           };
         freezeName = mkOption {
           type = types.singleLineStr;
-          default = "${cfg.sliceName}-freeze";
+          default = "sleep-on-idle-freeze@${cfg.sliceName}";
+          readOnly = true;
         };
         freezeUnit = mkOption {
           default = "${cfg.freezeName}.service";

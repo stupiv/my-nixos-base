@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 with lib; let
@@ -9,15 +8,13 @@ with lib; let
   systemctl = "${config.systemd.package}/bin/systemctl";
 in {
   config = mkIf (enabled != {}) {
-    systemd.services =
-      mapAttrs' (_: cfg: (nameValuePair cfg.freezeName {
-        unitConfig.StopWhenUnneeded = true;
-        serviceConfig = {
-          RemainAfterExit = true;
-          ExecStart = "-${systemctl} thaw ${cfg.sliceUnit}";
-          ExecStop = "-${systemctl} freeze ${cfg.sliceUnit}";
-        };
-      }))
-      enabled;
+    systemd.services."sleep-on-idle-freeze@" = {
+      unitConfig.StopWhenUnneeded = true;
+      serviceConfig = {
+        RemainAfterExit = true;
+        ExecStart = "-${systemctl} thaw %i.slice";
+        ExecStop = "-${systemctl} freeze %i.slice";
+      };
+    };
   };
 }
