@@ -117,14 +117,17 @@ in {
       enabled;
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${cfg.frappe.sitesDir} 0770 0 0 - -"
-        "d ${cfg.frappe.logsDir} 0770 0 0 - -"
-        "d ${cfg.frappe.backend.socket-folder} 0770 0 0 - -"
+        "d ${cfg.frappe.sitesDir} 0770 1000 0 - -"
+        "d ${cfg.frappe.sitesDir}/assets 0770 1000 0 - -"
+        "d ${cfg.frappe.logsDir} 0770 1000 0 - -"
+        "d ${cfg.frappe.backend.socket-folder} 0750 1000 0 - -"
         "d ${cfg.mariadb.stateDir} 0700 999 999 - -"
-        "d ${cfg.mariadb.socket-folder} 0777 - - - -"
-        "d ${cfg.valkey.queue.stateDir} 0700 0 0 - -"
-        "d ${cfg.valkey.cache.socket-folder} 0770 0 0 - -"
-        "d ${cfg.valkey.queue.socket-folder} 0770 0 0 - -"
+        "d ${cfg.mariadb.socket-folder} 0750 999 0 - -"
+        "d ${cfg.valkey.stateDir} 0750 999 0 - -"
+        "d ${cfg.valkey.queue.stateDir} 0700 999 0 - -"
+        "Z ${cfg.valkey.queue.stateDir} - 999 0 - -"
+        "d ${cfg.valkey.cache.socket-folder} 0750 999 0 - -"
+        "d ${cfg.valkey.queue.socket-folder} 0750 999 0 - -"
       ])
       enabled);
 
@@ -158,42 +161,83 @@ in {
 
     virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (
         name: cfg: let
+          common_hardening_options = [
+            "--cap-drop=ALL"
+            "--security-opt=no-new-privileges"
+            "--image-volume=ignore"
+            "--ipc=private"
+            "--pid=private"
+            "--uts=private"
+            "--cgroupns=private"
+            "--ulimit=core=0:0"
+          ];
           valkey_base = {
             autoStart = false;
             inherit (cfg.valkey) image;
+            user = "999:0";
+            extraOptions =
+              common_hardening_options
+              ++ [
+                "--pids-limit=256"
+                "--umask=0007"
+              ];
           };
           frappe_base = {
             autoStart = false;
             inherit (cfg.frappe.base) image;
-            environmentFiles = [config.sops.secrets.${cfg.frappe.envfile-key}.path];
             user = "frappe";
             workdir = in-container-bench-dir;
-            extraOptions = ["--tmpfs" "${in-container-bench-dir}/config:rw,mode=0770,U"];
+            extraOptions =
+              common_hardening_options
+              ++ [
+                "--group-add=0"
+                "--pids-limit=512"
+                "--umask=0007"
+              ];
             volumes = [
               "${cfg.frappe.benchDir}:${in-container-bench-dir}:O"
-              "${cfg.frappe.benchDir}${assets-path}:${in-container-bench-dir}${assets-path}:ro"
-              "${cfg.frappe.sitesDir}:${in-container-sites-dir}"
-              "${cfg.frappe.logsDir}:${in-container-logs-dir}"
-              "${cfg.frappe.backend.socket-folder}:${in-container-frappe-socket-folder}"
-              "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}"
-              "${cfg.valkey.cache.socket-folder}:${in-container-valkey-cache-socket-folder}"
-              "${cfg.valkey.queue.socket-folder}:${in-container-valkey-queue-socket-folder}"
+              "${cfg.frappe.benchDir}${assets-path}:${in-container-bench-dir}${assets-path}:ro,noexec,nosuid,nodev"
             ];
           };
+          frappe_rw_state_volumes = [
+            "${cfg.frappe.sitesDir}:${in-container-sites-dir}:rw,noexec,nosuid,nodev"
+            "${cfg.frappe.logsDir}:${in-container-logs-dir}:rw,noexec,nosuid,nodev"
+          ];
+          frappe_ro_sites_volumes = [
+            "${cfg.frappe.sitesDir}:${in-container-sites-dir}:ro,noexec,nosuid,nodev"
+          ];
+          frappe_valkey_socket_volumes = [
+            "${cfg.valkey.cache.socket-folder}:${in-container-valkey-cache-socket-folder}:ro,noexec,nosuid,nodev"
+            "${cfg.valkey.queue.socket-folder}:${in-container-valkey-queue-socket-folder}:ro,noexec,nosuid,nodev"
+          ];
+          frappe_db_and_valkey_socket_volumes =
+            [
+              "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}:ro,noexec,nosuid,nodev"
+            ]
+            ++ frappe_valkey_socket_volumes;
         in {
           ${cfg.mariadb.containerName} = {
             autoStart = false;
             inherit (cfg.mariadb) image;
+            user = "999:999";
             environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
             environment.MARIADB_AUTO_UPGRADE = "1";
+            extraOptions =
+              common_hardening_options
+              ++ [
+                "--pids-limit=512"
+                "--umask=0027"
+              ];
             cmd = [
+              "--skip-networking"
+              "--socket=${mariadb-socket}"
               "--character-set-server=utf8mb4"
               "--collation-server=utf8mb4_unicode_ci"
               "--skip-character-set-client-handshake"
             ];
             volumes = [
-              "${cfg.mariadb.stateDir}:${in-container-mariadb-data-dir}"
-              "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}"
+              "${cfg.mariadb.stateDir}:${in-container-mariadb-data-dir}:rw,noexec,nosuid,nodev"
+              "${cfg.mariadb.socket-folder}:${in-container-mariadb-socket-folder}:rw,noexec,nosuid,nodev"
             ];
           };
 
@@ -203,10 +247,10 @@ in {
               entrypoint = "sh";
               cmd = [
                 "-c"
-                "exec redis-server --port 0 --unixsocket ${valkey-cache-socket} --unixsocketperm 777"
+                "exec redis-server --port 0 --unixsocket ${valkey-cache-socket} --unixsocketperm 770 --save ''"
               ];
               volumes = [
-                "${cfg.valkey.cache.socket-folder}:${in-container-valkey-cache-socket-folder}"
+                "${cfg.valkey.cache.socket-folder}:${in-container-valkey-cache-socket-folder}:rw,noexec,nosuid,nodev"
               ];
             }
           ];
@@ -217,11 +261,11 @@ in {
               entrypoint = "sh";
               cmd = [
                 "-c"
-                "exec redis-server --port 0 --unixsocket ${valkey-queue-socket} --unixsocketperm 777 --dir ${in-container-valkey-data-dir}"
+                "exec redis-server --port 0 --unixsocket ${valkey-queue-socket} --unixsocketperm 770 --dir ${in-container-valkey-data-dir}"
               ];
               volumes = [
-                "${cfg.valkey.queue.stateDir}:${in-container-valkey-data-dir}"
-                "${cfg.valkey.queue.socket-folder}:${in-container-valkey-queue-socket-folder}"
+                "${cfg.valkey.queue.stateDir}:${in-container-valkey-data-dir}:rw,noexec,nosuid,nodev"
+                "${cfg.valkey.queue.socket-folder}:${in-container-valkey-queue-socket-folder}:rw,noexec,nosuid,nodev"
               ];
             }
           ];
@@ -231,6 +275,9 @@ in {
             {
               dependsOn = [cfg.frappe.configurator.containerName];
               entrypoint = "bash";
+              environmentFiles = optionals (!cfg.frappe.readOnlyMode) [
+                config.sops.secrets.${cfg.frappe.envfile-key}.path
+              ];
               environment = {
                 SITE = cfg.frappe.siteName;
                 MARIADB_SOCKET = mariadb-socket;
@@ -241,7 +288,16 @@ in {
                   then "1"
                   else "0";
               };
-              volumes = ["${toString create-site-script}:/opt/create-site.sh:ro"];
+              volumes =
+                (
+                  if cfg.frappe.readOnlyMode
+                  then frappe_ro_sites_volumes
+                  else frappe_rw_state_volumes
+                )
+                ++ frappe_db_and_valkey_socket_volumes
+                ++ [
+                  "${toString create-site-script}:/opt/create-site.sh:ro,nosuid,nodev"
+                ];
               cmd = ["/opt/create-site.sh"];
             }
           ];
@@ -262,7 +318,14 @@ in {
                     then "1"
                     else "0";
                 };
-                volumes = ["${toString migrate-script}:/opt/migrate.sh:ro"];
+                volumes =
+                  optionals (!cfg.frappe.readOnlyMode) (
+                    frappe_rw_state_volumes
+                    ++ frappe_db_and_valkey_socket_volumes
+                  )
+                  ++ [
+                    "${toString migrate-script}:/opt/migrate.sh:ro,nosuid,nodev"
+                  ];
                 cmd = ["/opt/migrate.sh"];
               }
             ];
@@ -292,7 +355,11 @@ in {
                   else "0";
                 HOST_NAME = "https://${cfg.modules.proxy-compose.hostname}";
               };
-              volumes = ["${toString configurator-script}:/opt/configurator.sh:ro"];
+              volumes =
+                frappe_rw_state_volumes
+                ++ [
+                  "${toString configurator-script}:/opt/configurator.sh:ro,nosuid,nodev"
+                ];
               cmd = ["/opt/configurator.sh"];
             }
           ];
@@ -301,12 +368,18 @@ in {
             frappe_base
             {
               dependsOn = [cfg.frappe.migrate.containerName];
+              volumes =
+                frappe_rw_state_volumes
+                ++ frappe_db_and_valkey_socket_volumes
+                ++ [
+                  "${cfg.frappe.backend.socket-folder}:${in-container-frappe-socket-folder}:rw,noexec,nosuid,nodev"
+                ];
               cmd = [
                 "/home/frappe/frappe-bench/env/bin/gunicorn"
                 "--chdir=${in-container-sites-dir}"
                 "--bind"
                 "unix:${frappe-socket}"
-                "--umask=000"
+                "--umask=007"
                 "--threads=4"
                 "--workers=2"
                 "--worker-class=gthread"
@@ -322,6 +395,9 @@ in {
             frappe_base
             {
               dependsOn = [cfg.frappe.migrate.containerName];
+              volumes =
+                frappe_rw_state_volumes
+                ++ frappe_db_and_valkey_socket_volumes;
               cmd = ["bench" "worker" "--queue" "long,default,short"];
             }
           ];
@@ -330,6 +406,9 @@ in {
             frappe_base
             {
               dependsOn = [cfg.frappe.migrate.containerName];
+              volumes =
+                frappe_rw_state_volumes
+                ++ frappe_db_and_valkey_socket_volumes;
               cmd = ["bench" "worker" "--queue" "short,default"];
             }
           ];
@@ -338,6 +417,9 @@ in {
             frappe_base
             {
               dependsOn = [cfg.frappe.migrate.containerName];
+              volumes =
+                frappe_rw_state_volumes
+                ++ frappe_db_and_valkey_socket_volumes;
               cmd = ["bench" "schedule"];
             }
           ];
@@ -346,6 +428,9 @@ in {
             frappe_base
             {
               dependsOn = [cfg.frappe.migrate.containerName];
+              volumes =
+                frappe_ro_sites_volumes
+                ++ frappe_valkey_socket_volumes;
               cmd = ["node" "/home/frappe/frappe-bench/apps/frappe/socketio.js"];
             }
           ];
@@ -358,21 +443,15 @@ in {
                 cfg.frappe.websocket.containerName
               ];
               cmd = ["nginx-entrypoint.sh"];
-              extraOptions = [
-                "--tmpfs"
-                "${in-container-bench-dir}/config:rw,mode=0770,U"
-                "--tmpfs"
-                "/etc/nginx/conf.d:rw,mode=0770,U"
-                "--tmpfs"
-                "/var/log/nginx:rw,mode=0770,U"
-                "--tmpfs"
-                "/var/lib/nginx:rw,mode=0770,U"
-                "--tmpfs"
-                "/run:rw,mode=0770,U"
-              ];
+              volumes =
+                frappe_ro_sites_volumes
+                ++ [
+                  "${cfg.frappe.backend.socket-folder}:${in-container-frappe-socket-folder}:ro,noexec,nosuid,nodev"
+                ];
               environment = {
                 BACKEND = "unix:${frappe-socket}";
                 FRAPPE_SITE_NAME_HEADER = cfg.frappe.siteName;
+                NGINX_LISTEN_PORT = "127.0.0.1:8080";
                 SOCKETIO = "127.0.0.1:${socketio_port}";
                 UPSTREAM_REAL_IP_ADDRESS = "127.0.0.1";
                 UPSTREAM_REAL_IP_HEADER = "X-Forwarded-For";
