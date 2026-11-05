@@ -9,22 +9,17 @@ with lib; let
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.squid;
   configFiles = mapAttrs (name: cfg: let
     text = ''
-      visible_hostname squid-${name}
-      http_port [${cfg.tcp-to-unix.cfg.origin.host}]:${toString cfg.tcp-to-unix.cfg.origin.port}
-      pid_filename none
-      pinger_enable off
-      umask 0077
       cache_log stdio:/var/log/squid-${name}/cache.log
       access_log stdio:/var/log/squid-${name}/access.log
       cache_store_log stdio:/var/log/squid-${name}/store.log
 
+      http_port [${cfg.tcp-to-unix.cfg.origin.host}]:${toString cfg.tcp-to-unix.cfg.origin.port}
       ${optionalString cfg.egress-restriction.enable ''
         acl my_squid_connect method CONNECT
         acl my_squid_https_port port 443
         ${optionalString (cfg.egress-restriction.fqdns != []) ''
           acl my_squid_allowed_fqdns dstdomain -n ${concatStringsSep " " cfg.egress-restriction.fqdns}
         ''}
-
         http_access deny !my_squid_connect
         http_access deny my_squid_connect !my_squid_https_port
         ${optionalString (cfg.egress-restriction.fqdns != []) ''
