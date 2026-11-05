@@ -1,7 +1,7 @@
 {
   nixpkgs.overlays = [
     (final: prev: {
-      myLib = final.myLib.extend (ml-final: ml-prev:
+      myLib = prev.myLib.overrideScope (ml-final: ml-prev:
         with prev.lib; {
           splitLastColon = s: let
             m = builtins.match "^(.*):([^:]*)$" s;

@@ -1,7 +1,7 @@
 {
   nixpkgs.overlays = [
     (final: prev: {
-      myLib = final.myLib.extend (ml-final: ml-prev:
+      myLib = prev.myLib.overrideScope (ml-final: ml-prev:
         with prev.lib; {
           unbracketIpv6 = s: let
             p = ml-final.splitLastColon s;
