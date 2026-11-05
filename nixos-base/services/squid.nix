@@ -9,6 +9,7 @@ with lib; let
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.squid;
   configFiles = mapAttrs (name: cfg: let
     text = ''
+      pid_filename /run/squid-${name}/squid.pid
       cache_log stdio:/var/log/squid-${name}/cache.log
       access_log stdio:/var/log/squid-${name}/access.log
       cache_store_log stdio:/var/log/squid-${name}/store.log
@@ -39,7 +40,7 @@ with lib; let
         allowSubstitutes = false;
       } ''
         cp "$textPath" "$out"
-        ${cfg.package}/bin/squid -n ${escapeShellArg name} -k parse -f "$out"
+        ${cfg.package}/bin/squid -n ${escapeShellArg cfg.squid-name} -k parse -f "$out"
       ''
     else pkgs.writeText "squid-${name}.conf" text)
   enabled;
@@ -65,9 +66,19 @@ in {
         netns-id = mkOption {
           type = types.singleLineStr;
         };
+        squid-name = mkOption {
+          # Squid's -n accepts only ASCII alphanumerics, up to 32 characters:
+          # "Garbage after alphanumeric service name in the -n option value".
+          type = types.strMatching "^[A-Za-z0-9]{1,32}$";
+          default = let
+            base = substring 0 23 (concatStrings (filter (c: builtins.match "[A-Za-z0-9]" c != null)
+              (stringToCharacters name)));
+          in "${base}${substring 0 8 (hashString "sha256" name)}";
+          defaultText = literalExpression ''<derived from the attribute name: alphanumerics only, 8-char hash suffix>'';
+        };
         serviceName = mkOption {
           type = types.singleLineStr;
-          default = "squid@${name}";
+          default = "squid@${cfg.squid-name}";
           readOnly = true;
         };
         package = mkOption {
@@ -177,10 +188,10 @@ in {
               LogsDirectoryMode = "0700";
               WorkingDirectory = "/var/cache/squid-%i";
               NoExecPaths = ["/var/cache/squid-%i" "/var/log/squid-%i" "/run/squid-%i"];
-              ExecStartPre = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -n %i -z -f \${SQUID_CONFIG}";
-              ExecStart = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -C -n %i -f \${SQUID_CONFIG}";
+              ExecStartPre = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -n \${SQUID_NAME} -z -f \${SQUID_CONFIG}";
+              ExecStart = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -C -n \${SQUID_NAME} -f \${SQUID_CONFIG}";
               ExecReload = [
-                "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -n %i -k parse -f \${SQUID_CONFIG}"
+                "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -n \${SQUID_NAME} -k parse -f \${SQUID_CONFIG}"
                 "${pkgs.coreutils}/bin/kill -HUP $MAINPID"
               ];
               KillMode = "mixed";
@@ -222,6 +233,7 @@ in {
             restartTriggers = [configFiles.${name} cfg.package];
             environment = {
               SQUID_BINARY = "${cfg.package}/bin/squid";
+              SQUID_NAME = "${cfg.squid-name}";
               SQUID_CONFIG = "/etc/squid/${name}.conf";
             };
           })
