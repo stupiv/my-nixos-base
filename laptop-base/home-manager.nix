@@ -18,7 +18,7 @@ with lib; {
       ];
       home = {
         inherit (config.myOpt.admin) username homeDirectory;
-        stateVersion = mkDefault (versions.majorMinor version);
+        stateVersion = config.system.nixos.release;
       };
     };
   };

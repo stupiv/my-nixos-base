@@ -10,7 +10,7 @@ with lib; let
   configFiles = mapAttrs (name: cfg: let
     text = ''
       visible_hostname squid-${name}
-      http_port [${cfg.host}]:${toString cfg.port}
+      http_port [${cfg.tcp-to-unix.cfg.origin.host}]:${toString cfg.tcp-to-unix.cfg.origin.port}
       pid_filename none
       pinger_enable off
       umask 0077
@@ -56,7 +56,9 @@ in {
 
   options.myOpt.squid = mkOption {
     default = {};
-    type = types.attrsOf (types.submodule ({name, ...}: {
+    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
+      cfg = innerArgs.config;
+    in {
       options = {
         enable = mkOption {
           type = types.bool;
@@ -78,6 +80,7 @@ in {
         };
         extraConfig = mkOption {
           type = types.lines;
+          default = '''';
         };
         validateConfig = mkOption {
           type = types.bool;
@@ -93,67 +96,47 @@ in {
           };
         };
         tcp-to-unix = {
+          id = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-tcp-to-unix";
+          };
+          cfg = mkOption {
+            type = types.anything;
+            default = outerCfg.myOpt.systemd-socket-proxyd.${cfg.tcp-to-unix.id};
+          };
           origin = {
-            serviceName = mkOption {
-              type = types.singleLineStr;
-              default = cfg.serviceName;
-              readOnly = true;
-            };
-            host = mkOption {
-              type = types.singleLineStr;
-              default = "::1";
-              readOnly = true;
-            };
             port = mkOption {
               type = types.port;
-            };
-          };
-          proxy = {
-            serviceName = mkOption {
-              type = types.singleLineStr;
-              default = "squid-${name}-tcp-to-unix";
-            };
-            ip-socket = mkOption {
-              type = types.strMatching "^/run/[^/]+/.*[^/]$";
             };
           };
         };
+        unix-socket = mkOption {
+          type = types.strMatching "^/run/[^/]+/.*[^/]$";
+          default = "/run/squid/${name}.sock";
+        };
         unix-to-tcp = {
-          origin = {
-            serviceName = mkOption {
-              type = types.singleLineStr;
-              default = cfg.tcp-to-unix.proxy.serviceName;
-              readOnly = true;
-            };
-            ip-socket = mkOption {
-              type = types.strMatching "^/run/[^/]+/.*[^/]$";
-              default = cfg.tcp-to-unix.proxy.ip-socket;
-              readOnly = true;
-            };
+          id = mkOption {
+            type = types.singleLineStr;
+            default = "${name}-unix-to-tcp";
+          };
+          cfg = mkOption {
+            type = types.anything;
+            default = outerCfg.myOpt.systemd-socket-proxyd.${cfg.unix-to-tcp.id};
           };
           proxy = {
-            serviceName = mkOption {
-              type = types.singleLineStr;
-              default = "squid-${name}-unix-to-tcp";
-            };
             port = mkOption {
               type = types.port;
-            };
-            host = mkOption {
-              type = types.host;
-              default = "::1";
-              readOnly = true;
             };
           };
         };
         environment = {
           HTTP_PROXY = mkOption {
-            type = types.strMatch "^http.+[^/]$";
-            defualt = "http://[${cfg.unix-to-tcp.host}]:${cfg.unix-to-tcp.port}";
+            type = types.strMatching "^http.+[^/]$";
+            default = "http://${cfg.unix-to-tcp.cfg.proxy.ip-socket}";
             readOnly = true;
           };
           HTTPS_PROXY = mkOption {
-            type = types.strMatch "^http.+[^/]$";
+            type = types.strMatching "^http.+[^/]$";
             default = cfg.environment.HTTP_PROXY;
             readOnly = true;
           };
@@ -173,48 +156,6 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    assertions =
-      mapAttrsToList (name: _: {
-        assertion = builtins.match "[A-Za-z0-9_][A-Za-z0-9_-]{0,24}" name != null;
-        message = "myOpt.squid instance names must contain 1-25 letters, digits, underscores or hyphens and must not start with a hyphen.";
-      })
-      enabled
-      ++ [
-        {
-          assertion = let
-            listeners = mapAttrsToList (_: cfg: "${cfg.host}:${toString cfg.port}") enabled;
-          in
-            length (unique listeners) == length listeners;
-          message = "myOpt.squid instances must have distinct listener addresses/ports.";
-        }
-        {
-          assertion = let
-            names = mapAttrsToList (_: cfg: cfg.tcp-to-unix.serviceName) enabled;
-          in
-            length (unique names) == length names;
-          message = "myOpt.squid proxy service names must be unique.";
-        }
-        {
-          assertion = all (cfg: !(elem cfg.tcp-to-unix.serviceName (mapAttrsToList (_: cfg: cfg.serviceName) enabled))) (attrValues enabled);
-          message = "myOpt.squid proxy service names must not collide with native Squid instance units.";
-        }
-        {
-          assertion = let
-            paths = mapAttrsToList (_: cfg: cfg.tcp-to-unix.unix-socket) enabled;
-          in
-            length (unique paths)
-            == length paths
-            && all (a: all (b: a == b || !(hasPrefix "${a}/" b || hasPrefix "${b}/" a)) paths) paths;
-          message = "myOpt.squid proxy socket paths must not overlap.";
-        }
-        {
-          assertion =
-            all (cfg:
-              all (name: !hasPrefix "/run/squid-${name}/" cfg.tcp-to-unix.unix-socket && cfg.tcp-to-unix.unix-socket != "/run/squid-${name}") (attrNames enabled)) (attrValues enabled);
-          message = "myOpt.squid proxy sockets must be outside Squid's per-instance runtime directories.";
-        }
-      ];
-
     environment.etc = mapAttrs' (name: _:
       nameValuePair "squid/${name}.conf" {
         source = configFiles.${name};
@@ -309,15 +250,26 @@ in {
     );
 
     myOpt.systemd-socket-proxyd = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.tcp-to-unix.proxy.name} = cfg.tcp-to-unix;
-        ${cfg.unix-to-tcp.proxy.name} = cfg.unix-to-tcp;
+        ${cfg.tcp-to-unix.id} = {
+          origin = {
+            inherit (cfg) serviceName;
+            inherit (cfg.tcp-to-unix.origin) port;
+          };
+          proxy.ip-socket = cfg.unix-socket;
+        };
+        ${cfg.unix-to-tcp.id} = {
+          inherit (cfg.unix-to-tcp) proxy;
+          origin = {
+            inherit (cfg.tcp-to-unix.cfg.proxy) serviceName ip-socket;
+          };
+        };
       })
       enabled);
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.netns-id}.set-network-namespace = {
           systemd-services = [
-            cfg.unix-to-tcp.proxy.serviceName
+            cfg.unix-to-tcp.cfg.proxy.serviceName
           ];
         };
       })
@@ -327,8 +279,8 @@ in {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
           systemd-services = [
             cfg.serviceName
-            cfg.tcp-to-unix.proxy.serviceName
-            cfg.unix-to-tcp.proxy.serviceName
+            cfg.tcp-to-unix.cfg.proxy.serviceName
+            cfg.unix-to-tcp.cfg.proxy.serviceName
           ];
         };
       })

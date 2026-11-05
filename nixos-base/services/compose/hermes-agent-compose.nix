@@ -156,9 +156,9 @@ in {
       })
       enabled);
 
-    myOpt.searxng = mkMerge (mapAttrsToList (name: cfg: {
-      })
-      enabled);
+    # myOpt.searxng = mkMerge (mapAttrsToList (name: cfg: {
+    #   })
+    #   enabled);
 
     myOpt.litellm = mkMerge (mapAttrsToList (name: cfg: {
       })

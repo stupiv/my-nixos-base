@@ -20,7 +20,6 @@ with lib; let
   valkey-socket-name = "valkey.sock";
   frappe-socket-name = "gunicorn.sock";
   socketio_port = "9000";
-  mk-sleep-on-idle-cfg = cfg: outerCfg.myOpt.sleep-on-idle.${outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.sleep-on-idle-id};
   mk-container-names = cfg:
     with cfg; [
       mariadb.containerName
@@ -74,13 +73,27 @@ in {
       enabled);
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
-        ${name}.set-network-namespace = {
-          oci-containers = mk-container-names cfg;
-          systemd-services = [
-            (mk-sleep-on-idle-cfg cfg).endpoints.default.proxy.name
-          ];
-          nixos-containers = [];
+        ${cfg.netns-id} = {
+          enable = true;
+          set-network-namespace = {
+            oci-containers = mk-container-names cfg;
+            systemd-services = [
+              outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id}.endpoints.default.proxy.name
+            ];
+            nixos-containers = [];
+          };
         };
+      })
+      enabled);
+
+    myOpt.squid = mkMerge (mapAttrsToList (name: cfg: {
+        ${name} = mkMerge [
+          cfg.modules.squid
+          {
+            enable = true;
+            inherit (cfg) netns-id sleep-on-idle-id;
+          }
+        ];
       })
       enabled);
 

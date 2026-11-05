@@ -42,13 +42,13 @@ in {
     default = null;
   };
   host = mkOption {
-    type = types.nullOr types.singleLineStr;
-    default = null;
+    type = types.singleLineStr;
+    default = "::1";
   };
   ip-socket = mkOption {
     type = types.singleLineStr;
     default =
-      if cfg.host != null && cfg.port != null
+      if cfg.port != null
       then "${cfg.host}:${toString cfg.port}"
       else default-ip-socket;
     apply =

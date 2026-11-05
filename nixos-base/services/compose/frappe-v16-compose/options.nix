@@ -22,8 +22,21 @@ in {
             type = types.anything;
             default = {};
           };
+          squid = mkOption {
+            type = types.anything;
+            default = {};
+          };
         };
         proxy-compose-id = mkOption {
+          type = types.anything;
+          default = name;
+        };
+        sleep-on-idle-id = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.sleep-on-idle-id;
+          readOnly = true;
+        };
+        netns-id = mkOption {
           type = types.anything;
           default = name;
         };

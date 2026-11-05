@@ -22,7 +22,6 @@ in {
   };
 
   config = mkIf (cfg.enable) {
-    networking.enableIPv6 = true;
     networking.networkmanager.dns = "none"; # OPTIONAL. default networkmanager listens on udp 0.0.0.0:53
 
     # See https://nixos.wiki/wiki/Encrypted_DNS

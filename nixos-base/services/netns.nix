@@ -38,7 +38,7 @@ in {
             };
             nsPath = mkOption {
               type = types.singleLineStr;
-              default = "/run/netns/${cfg.networkNamespace}";
+              default = "/run/netns/${cfg.ns}";
               readOnly = true;
             };
             serviceName = mkOption {

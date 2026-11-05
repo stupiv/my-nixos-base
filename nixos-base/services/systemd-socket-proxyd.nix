@@ -52,27 +52,28 @@ in {
     }));
   };
   config = mkIf (enabled != {}) {
-    systemd.sockets = mkMerge [
-      {
-        "systemd-socket-proxyd@" = {};
-      }
-      (mapAttrsToList (_: cfg: {
+    systemd.sockets = mkMerge ([
+        {
+          "systemd-socket-proxyd@" = {};
+        }
+      ]
+      ++ (mapAttrsToList (_: cfg: {
           ${cfg.proxy.serviceName} = {
             overrideStrategy = "asDropin";
             wantedBy = ["sockets.target"];
             listenStreams = [cfg.proxy.ip-socket];
           };
         })
-        enabled)
-    ];
-    systemd.services = mkMerge [
-      {
-        "systemd-socket-proxyd@" = {
-          requires = ["systemd-socket-proxyd@%i.socket"];
-          after = ["systemd-socket-proxyd@%i.socket"];
-        };
-      }
-      (mapAttrsToList (_: cfg: let
+        enabled));
+    systemd.services = mkMerge ([
+        {
+          "systemd-socket-proxyd@" = {
+            requires = ["systemd-socket-proxyd@%i.socket"];
+            after = ["systemd-socket-proxyd@%i.socket"];
+          };
+        }
+      ]
+      ++ (mapAttrsToList (_: cfg: let
           originUnit = "${cfg.origin.serviceName}.service";
           systemd-socket-proxyd = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd";
         in {
@@ -86,7 +87,6 @@ in {
             ];
           };
         })
-        enabled)
-    ];
+        enabled));
   };
 }
