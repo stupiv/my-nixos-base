@@ -177,9 +177,9 @@ Ordered roughly by how likely they are to bite. Each is repeated in the relevant
   without setting a port yields `[ null ]`. Set `myOpt.openssh.port` whenever `enable` is true.
 - **G6 — `nixos-base/services/compose/n8n-compose.nix` reads undeclared options** (`cfg.n8n.serviceName`,
   `cfg.proxy-compose.hostname`). It looks unfinished; treat it as WIP and do not enable it blind.
-- **G7 — TLP settings contain an apparent typo** `USB_EXLUDE_PHONE` in `nixos-base/tlp.nix` (elsewhere in the file the
-  key is spelled `USB_EXCLUDE_BTUSB`). **⚠ verify** against linrunner.de before trusting the comment's intent.
-  Same file also pins charge thresholds 75/80 % for both batteries.
+- **G7 — TLP settings** in `nixos-base/tlp.nix` exclude phones from USB autosuspend and set the default power profile
+  to `SAV`, using setting names for both older and newer TLP versions. The file also pins charge thresholds
+  75/80 % for both batteries.
 - **G8 — hard-coded locale/timezone** in `nixos-base/time.nix` (`Asia/Ho_Chi_Minh`, `LC_TIME = en_DK.UTF-8`).
   Intentional (24-hour clock in English), but a per-host override needs `mkForce`/`mkDefault` awareness.
 - **G9 — `zramSwap.memoryPercent = 400` + `swapDevices = mkForce []`** — deliberate "no disk swap" policy; any host
