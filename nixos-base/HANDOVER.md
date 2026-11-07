@@ -94,8 +94,8 @@ way in is a key in `authorizedKeys` (directly or via the tunnel).
 ## Known issues local to this directory
 
 - **G5** `ports = [cfg.port]` with `null` default (above).
-- **G7** `USB_EXLUDE_PHONE` in `tlp.nix` looks like a typo for `USB_EXCLUDE_PHONE` (**⚠ verify** against
-  linrunner.de); `TLP_AUTO_SWITCH = 0` + `TLP_PROFILE_DEFAULT = "SAV"` also pin the power profile.
+- **G7** `USB_EXCLUDE_PHONE` in `tlp.nix` excludes phones from USB autosuspend. `TLP_AUTO_SWITCH = 0` and the
+  default profile settings for older and newer TLP versions select `SAV` at startup.
 - **G8** hard-coded `Asia/Ho_Chi_Minh` + `en_DK.UTF-8` for `LC_TIME`. Deliberate (metric clock in English), but it is
   the first thing to override on a machine in another region.
 - `caddy.nix` uses `mkIf config.services.caddy.enable` — if you replace Caddy with something else, this module becomes

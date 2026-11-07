@@ -10,6 +10,7 @@ with lib; {
         assertion =
           !config.services.tlp.enable
           || (!config.services.power-profiles-daemon.enable && !config.services.thermald.enable && !config.powerManagement.powertop.enable);
+        message = "TLP cannot be enabled alongside power-profiles-daemon, thermald, or powertop.";
       }
     ];
     services.power-profiles-daemon.enable = mkIf (config.services.tlp.enable) false; # See https://linrunner.de/tlp/faq/ppd.html#does-power-profiles-daemon-conflict-with-tlp
@@ -26,9 +27,10 @@ with lib; {
         RESTORE_THRESHOLDS_ON_BAT = 1;
         #
         TLP_AUTO_SWITCH = 0;
+        TLP_DEFAULT_MODE = "SAV";
         TLP_PROFILE_DEFAULT = "SAV";
         #
-        USB_EXLUDE_PHONE = 1; # See https://linrunner.de/tlp/faq/usb.html#smartphone-does-not-charge-when-connected
+        USB_EXCLUDE_PHONE = 1; # See https://linrunner.de/tlp/faq/usb.html#smartphone-does-not-charge-when-connected
         WIFI_PWR_ON_BAT = "off"; # See https://linrunner.de/tlp/faq/radio.html#slow-or-unstable-wi-fi-on-battery-power
         USB_EXCLUDE_BTUSB = 1; # See https://linrunner.de/tlp/faq/radio.html#faq-bluetooth-unstable
         # SOUND_POWER_SAVE_ON_AC = 0; # See https://linrunner.de/tlp/faq/audio.html
