@@ -175,14 +175,14 @@ in {
             {
               autoStart = false;
               extraOptions = [
-                "--cap-drop=ALL"
-                "--security-opt=no-new-privileges"
-                "--image-volume=ignore"
-                "--ipc=private"
-                "--pid=private"
-                "--uts=private"
-                "--cgroupns=private"
-                "--ulimit=core=0:0"
+                # "--cap-drop=ALL"
+                # "--security-opt=no-new-privileges"
+                # "--image-volume=ignore"
+                # "--ipc=private"
+                # "--pid=private"
+                # "--uts=private"
+                # "--cgroupns=private"
+                # "--ulimit=core=0:0"
               ];
             }
           ];

@@ -17,15 +17,11 @@ with lib; let
       ${optionalString cfg.egress-restriction.enable ''
         acl my_squid_connect method CONNECT
         acl my_squid_https_port port 443
-        ${optionalString (cfg.egress-restriction.fqdns != []) ''
-          acl my_squid_allowed_fqdns dstdomain -n ${concatStringsSep " " cfg.egress-restriction.fqdns}
-        ''}
+        acl my_squid_allowed_fqdns dstdomain -n ${concatStringsSep " " cfg.egress-restriction.fqdns}
         http_access deny !my_squid_connect
         http_access deny my_squid_connect !my_squid_https_port
-        ${optionalString (cfg.egress-restriction.fqdns != []) ''
-          http_access deny my_squid_connect my_squid_https_port !my_squid_allowed_fqdns
-          http_access allow my_squid_connect my_squid_https_port my_squid_allowed_fqdns
-        ''}
+        http_access deny my_squid_connect my_squid_https_port !my_squid_allowed_fqdns
+        http_access allow my_squid_connect my_squid_https_port my_squid_allowed_fqdns
       ''}
       ${cfg.extraConfig}
     '';
@@ -39,7 +35,7 @@ with lib; let
         allowSubstitutes = false;
       } ''
         cp "$textPath" "$out"
-        ${cfg.package}/bin/squid -n ${escapeShellArg name} -k parse -f "$out"
+        ${cfg.package}/bin/squid -k parse -f "$out"
       ''
     else pkgs.writeText "squid-${name}.conf" text)
   enabled;
@@ -87,7 +83,7 @@ in {
             default = true;
           };
           fqdns = mkOption {
-            type = types.listOf (types.strMatching "^\\.?([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$");
+            type = types.listOf (types.singleLineStr);
           };
         };
         tcp-to-unix = {
@@ -177,12 +173,8 @@ in {
               LogsDirectoryMode = "0700";
               WorkingDirectory = "/var/cache/squid-%i";
               NoExecPaths = ["/var/cache/squid-%i" "/var/log/squid-%i" "/run/squid-%i"];
-              ExecStartPre = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -n %i -z -f \${SQUID_CONFIG}";
-              ExecStart = "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -N -C -n %i -f \${SQUID_CONFIG}";
-              ExecReload = [
-                "${pkgs.coreutils}/bin/env -- \${SQUID_BINARY} -n %i -k parse -f \${SQUID_CONFIG}"
-                "${pkgs.coreutils}/bin/kill -HUP $MAINPID"
-              ];
+              ExecStartPre = "\${SQUID_BINARY} --foreground -z -f \${SQUID_CONFIG}";
+              ExecStart = "\${SQUID_BINARY} --foreground -YCs -f \${SQUID_CONFIG}";
               KillMode = "mixed";
               Restart = "on-failure";
               NoNewPrivileges = true;

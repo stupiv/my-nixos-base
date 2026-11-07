@@ -18,12 +18,23 @@ in {
           default = true;
         };
         modules.services.postgresql = mkOption {
-          type = types.anything;
-          default = {};
+          type = types.submodule ({...}:{
+            freeformType = types.anything;
+            options = {
+              package = mkOption {
+                type = types.anything;
+              };
+              settings.port = mkOption {
+                type = types.anything;
+              };
+            };
+          });
         };
         container = mkOption {
-          type = types.anything;
-          default = {};
+          type = types.submodule ({...}:{
+            freeformType = types.anything;
+            options = {};
+          });
         };
         stateDir = mkOption {
           type = types.anything;
@@ -45,7 +56,6 @@ in {
             cfg.modules.services.postgresql
             {
               enable = true;
-              package = mkDefault cfg.modules.services.postgresql.package;
               dataDir = cfg.stateDir;
             }
           ];
