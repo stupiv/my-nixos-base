@@ -18,9 +18,17 @@ in {
           type = types.bool;
           default = true;
         };
-        modules.services.litellm = mkOption {
-          type = types.anything;
-          default = {};
+        modules = {
+          services.litellm = mkOption {
+            type = types.anything;
+            default = {};
+          };
+        };
+        netns-id = mkOption {
+          type = types.singleLineStr;
+        };
+        sleep-on-idle-id = mkOption {
+          type = types.singleLineStr;
         };
         container = mkOption {
           type = types.anything;

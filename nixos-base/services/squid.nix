@@ -134,7 +134,6 @@ in {
           NO_PROXY = mkOption {
             type = types.singleLineStr;
             default = "localhost,127.0.0.1,::1";
-            readOnly = true;
           };
         };
         set-env-vars = mkOption {

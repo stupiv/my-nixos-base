@@ -126,9 +126,9 @@ in {
       ]))
     enabled;
 
-    # myOpt.searxng = mkMerge (mapAttrsToList (name: cfg: {
-    #   })
-    #   enabled);
+    myOpt.searxng = mkMerge (mapAttrsToList (name: cfg: {
+      })
+      enabled);
 
     myOpt.litellm = mapAttrs' (name: cfg: let
       litellmEnvPath = outerCfg.sops.secrets.${litellmSecretKey name}.path;

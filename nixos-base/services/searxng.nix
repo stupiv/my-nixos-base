@@ -29,6 +29,12 @@ in {
             };
           });
         };
+        netns-id = mkOption {
+          type = types.singleLineStr;
+        };
+        sleep-on-idle-id = mkOption {
+          type = types.singleLineStr;
+        };
         container = mkOption {
           default = {};
           type = types.submodule ({...}: {

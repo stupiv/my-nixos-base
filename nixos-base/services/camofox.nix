@@ -19,79 +19,81 @@ in {
           default = true;
         };
         modules.virtualisation.oci-containers.containers = mkOption {
+          type = types.submodule ({...}: {
+            freeformType = types.anything;
+            options = {
+              image = mkOption {
+                type = types.anything;
+                # See https://github.com/jo-inc/camofox-browser/pkgs/container/camofox-browser
+              };
+              environment = mkOption {
+                freeformType = types.anything;
+                type = types.submodule ({...}: {
+                  options = {
+                    CAMOFOX_BIND_HOST = mkOption {
+                      type = types.anything;
+                    };
+                    CAMOFOX_PORT = mkOption {
+                      type = types.anything;
+                    };
+                    HTTP_PROXY = mkOption {
+                      type = types.strMatching "^http.+[^/]$";
+                    };
+                    HTTPS_PROXY = mkOption {
+                      type = types.strMatching "^http.+[^/]$";
+                    };
+                    NO_PROXY = mkOption {
+                      type = types.singleLineStr;
+                      default = "localhost,127.0.0.1,::1";
+                    };
+                  };
+                });
+              };
+            };
+          });
+        };
+        netns-id = mkOption {
           type = types.anything;
-          default = {};
         };
-        containerName = mkOption {
-          type = types.singleLineStr;
-          default = "${name}-camofox";
+        sleep-on-idle-id = mkOption {
+          type = types.anything;
         };
-        serviceName = mkOption {
-          type = types.singleLineStr;
-          default = outerCfg.virtualisation.oci-containers.containers.${cfg.containerName}.serviceName;
-          readOnly = true;
+        oci-container.name = mkOption {
+          type = types.anything;
         };
-        image = mkOption {
-          type = types.singleLineStr;
-          example = "ghcr.io/jo-inc/camofox-browser:1.18.1";
-        };
-        host = mkOption {
-          type = types.singleLineStr;
-          default = "::1";
-        };
-        port = mkOption {
-          type = types.port;
-        };
-        url = mkOption {
-          type = types.singleLineStr;
-          default = "http://${pkgs.myLib.bracketIpv6 "${cfg.host}:${toString cfg.port}"}";
-          readOnly = true;
-        };
-        envfile-key = mkOption {
-          type = types.nullOr types.singleLineStr;
-          default = "${name}/camofox-envFile";
-        };
-        sopsFile = mkOption {
-          type = types.nullOr types.anything;
-          default = null;
-        };
-        environment = mkOption {
-          type = types.attrsOf types.str;
-          default = {};
-        };
-        environmentFiles = mkOption {
-          type = types.listOf types.str;
-          default = [];
+        sops.envfile = {
+          cfg = mkOption {
+            type = types.anything;
+            default = outerCfg.sops.secrets.${cfg.sops.envfile.key};
+            readOnly = true;
+          };
+          key = mkOption {
+            type = types.anything;
+          };
+          sopsFile = mkOption {
+            type = types.anything;
+          };
         };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
-        optionalAttrs (cfg.envfile-key != null) {
-          ${cfg.envfile-key} = optionalAttrs (cfg.sopsFile != null) {
-            inherit (cfg) sopsFile;
-          };
-        })
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.sops.envfile.key} = {
+          inherit (cfg.sops.envfile) sopsFile;
+        };
+      })
       enabled);
 
-    virtualisation.oci-containers.backend = "podman";
     virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.containerName} = mkMerge [
+        ${cfg.oci-container.name} = mkMerge [
+          cfg.modules.virtualisation.oci-containers.containers
           {
-            inherit (cfg) image;
-            serviceName = mkDefault cfg.containerName;
             autoStart = false;
-            environment =
-              {
-                CAMOFOX_BIND_HOST = cfg.host;
-                CAMOFOX_PORT = toString cfg.port;
-              }
-              // cfg.environment;
-            environmentFiles =
-              optional (cfg.envfile-key != null) outerCfg.sops.secrets.${cfg.envfile-key}.path
-              ++ cfg.environmentFiles;
+            environmentFiles = [
+              cfg.sops.envfile.cfg.path
+            ];
             extraOptions = [
               "--shm-size=2g"
               "--read-only"
@@ -100,22 +102,24 @@ in {
               "--pids-limit=512"
             ];
           }
-          cfg.modules.virtualisation.oci-containers.containers
         ];
       })
       enabled);
 
-    systemd.services = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.serviceName}.serviceConfig = {
-          ProtectHome = true;
-          ProtectClock = true;
-          ProtectHostname = true;
-          ProtectKernelLogs = true;
-          ProtectKernelModules = true;
-          ProtectKernelTunables = true;
-          LockPersonality = true;
-          RestrictRealtime = true;
-          RestrictSUIDSGID = true;
+    myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.netns-id}.set-network-namespace = {
+          oci-containers = [
+            cfg.oci-container.name
+          ];
+        };
+      })
+      enabled);
+
+    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
+          oci-containers = [
+            cfg.oci-container.name
+          ];
         };
       })
       enabled);

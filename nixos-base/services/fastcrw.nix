@@ -18,68 +18,70 @@ in {
           type = types.bool;
           default = true;
         };
-        autoStart = mkOption {
-          type = types.bool;
-          default = false;
+        modules = {
+          systemd.services = mkOption {
+            type = types.submodule ({...}: {
+              freeformType = types.anything;
+              options = {
+                environment = mkOption {
+                  freeformType = types.anything;
+                  type = types.submodule ({...}: {
+                    options = {
+                      CRW_SERVER__HOST = mkOption {
+                        type = types.anything;
+                      };
+                      CRW_SERVER__PORT = mkOption {
+                        type = types.anything;
+                      };
+                    };
+                  });
+                };
+              };
+            });
+          };
         };
-        package = mkOption {
-          type = types.package;
+        netns-id = mkOption {
+          type = types.singleLineStr;
+        };
+        sleep-on-idle-id = mkOption {
+          type = types.singleLineStr;
         };
         serviceName = mkOption {
           type = types.singleLineStr;
           default = "fastcrw@${name}";
           readOnly = true;
         };
-        host = mkOption {
-          type = types.singleLineStr;
-          default = "::1";
+        package = mkOption {
+          type = types.package;
         };
-        port = mkOption {
-          type = types.port;
-        };
-        url = mkOption {
-          type = types.singleLineStr;
-          default = "http://${pkgs.myLib.bracketIpv6 "${cfg.host}:${toString cfg.port}"}";
-          readOnly = true;
-        };
-        environment = mkOption {
-          type = types.attrsOf types.str;
-          default = {};
-        };
-        environmentFiles = mkOption {
-          type = types.listOf types.str;
-          default = [];
-        };
-        envfile-key = mkOption {
-          type = types.nullOr types.singleLineStr;
-          default = "${name}/fastcrw-envFile";
-        };
-        sopsFile = mkOption {
-          type = types.nullOr types.anything;
-          default = null;
-        };
-        modules.systemd.services = mkOption {
-          type = types.anything;
-          default = {};
+        sops.envfile = {
+          cfg = mkOption {
+            type = types.anything;
+            default = outerCfg.sops.secrets.${cfg.sops.envfile.key};
+            readOnly = true;
+          };
+          key = mkOption {
+            type = types.anything;
+          };
+          sopsFile = mkOption {
+            type = types.anything;
+          };
         };
       };
     }));
   };
-
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
-        optionalAttrs (cfg.envfile-key != null) {
-          ${cfg.envfile-key} = optionalAttrs (cfg.sopsFile != null) {
-            inherit (cfg) sopsFile;
-          };
-        })
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.sops.envfile.key} = {
+          inherit (cfg.sops.envfile) sopsFile;
+        };
+      })
       enabled);
 
     systemd.services = mkMerge (
       [
         {
           "fastcrw@" = {
-            description = "Stateless FastCRW web scraper and search API (%i)";
             serviceConfig = {
               Restart = "on-failure";
               DynamicUser = true;
@@ -129,27 +131,38 @@ in {
       ]
       ++ mapAttrsToList (_: cfg: {
         ${cfg.serviceName} = mkMerge [
+          cfg.modules.systemd.services
           {
             overrideStrategy = "asDropin";
             restartTriggers = [cfg.package];
-            wantedBy = optional cfg.autoStart "multi-user.target";
-            environment =
-              {
-                CRW_SERVER__HOST = cfg.host;
-                CRW_SERVER__PORT = toString cfg.port;
-              }
-              // cfg.environment;
             serviceConfig = {
               ExecStart = "${cfg.package}/bin/crw-server";
-              EnvironmentFile =
-                optional (cfg.envfile-key != null) outerCfg.sops.secrets.${cfg.envfile-key}.path
-                ++ cfg.environmentFiles;
+              EnvironmentFile = [
+                cfg.sops.envfile.cfg.path
+              ];
             };
           }
-          cfg.modules.systemd.services
         ];
       })
       enabled
     );
+
+    myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.netns-id}.set-network-namespace = {
+          systemd-services = [
+            cfg.serviceName
+          ];
+        };
+      })
+      enabled);
+
+    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
+          systemd-services = [
+            cfg.serviceName
+          ];
+        };
+      })
+      enabled);
   };
 }
