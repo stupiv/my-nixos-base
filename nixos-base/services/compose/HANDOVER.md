@@ -19,7 +19,7 @@
       - `myOpt.proxy-compose.<id>` provides the Caddy vhost, Cloudflare tunnel and sleep-on-idle instance.
       - `myOpt.sleep-on-idle.<id>` provides the health-check path and `endpoints.default`.
       - `myOpt.netns.<id>` gives the containers plus the proxy their own network namespace.
-      - `myOpt.squid.<id>` provides the egress allowlist, so far only for frappe.
+      - `myOpt.squid.<id>` provides the egress allowlist for frappe and hermes-agent-compose.
     - Put the actual units in `containers.<name>.config` or in `virtualisation.oci-containers.containers`.
     - Declare `sops.secrets."<name>/<purpose>"` for every env file or keybase file, never a value and only a path.
     - Set `autoStart = false` plus `set-cgroup-parent` so the whole stack is pulled up on first request and frozen afterwards.
@@ -49,15 +49,12 @@
       - Evaluating an enabled n8n instance should therefore fail, so treat it as unfinished.
       - `myPkgs/oci-img.nix` already carries `n8n_v2 = 2.28.7` for when it is finished.
     - `hermes-agent-compose.nix` is a NixOS container and is a **skeleton**.
-      - It declares a large option surface including `hermes-agent.{user,group,uid,gid,stateDir,port,unix-socket,settings,extra-users}`, `modules.{netns,sleep-on-idle,fastcrw,litellm,camofox,searxng}` and `telemetry`.
-      - Its config is mostly **empty `mkMerge (mapAttrsToList (_: cfg: { }) enabled)` blocks**, so the plumbing for `myOpt.netns`, `myOpt.camofox`, `myOpt.litellm` and `sops.secrets` is stubbed.
-      - What *is* implemented is users and groups, the `settings` **`apply`**, a two-endpoint sleep-on-idle instance and the container itself.
-      - The `settings` apply is a `recursiveUpdate` that forces firecrawl backends, `browser.cloud_provider = "camofox"`, `model.base_url = ${myOpt.litellm.<name>.url}/v1`, telemetry toggles and `moa.presets.default.enabled = false`.
+      - It declares `modules.{netns,sleep-on-idle,squid,fastcrw,litellm,camofox,searxng,hermes-agent}`, `netns-id` (default `name`), `sleep-on-idle-id` (default `name`), and `telemetry`, delegating container-side configuration to `myOpt.hermes-agent` (`../hermes-agent.nix`) and `myOpt.litellm` (`../litellm.nix`) inside the same NixOS container.
+      - Its config wires `sops.secrets` (`${name}/hermes-agent-envFile`, `${name}/litellm-envFile`), host `users`/`groups`, `myOpt.netns` (`set-network-namespace` covering the container, `camofox` OCI container, and optional `fastcrw` template unit), `myOpt.squid` pass-through, `myOpt.camofox`, `myOpt.litellm`, `myOpt.hermes-agent`, optional `myOpt.fastcrw` (`enable = mkDefault (cfg.modules.fastcrw != {})`), a two-endpoint `myOpt.sleep-on-idle` instance (`set-cgroup-parent`), `tmpfiles` rules, and the host container wrapper bind-mounting both state dirs, `shared-run-dir`, and deduplicated sops secret directories.
+      - It merges `cfg.modules.hermes-agent` into `myOpt.hermes-agent.${name}` along with `container = { name = cfg.containerName; inherit (cfg) shared-run-dir; }`, `mkDefault` `model.base_url` (`${litellmCfg.url}/v1`), `mkDefault` `telemetry.shared_metrics`, `CAMOFOX_URL`, optional `FIRECRAWL_API_URL`, and `environmentFiles = [hermesEnvPath]`.
+      - Host `users`, `sleep-on-idle`, `bindMounts` and `tmpfiles` rules read `user`, `group`, `uid`, `gid`, `stateDir`, `host`, `port` and `unix-socket` back from `outerCfg.myOpt.hermes-agent.${name}` and `outerCfg.myOpt.litellm.${name}`.
       - The sleep-on-idle instance maps `default` to the hermes socket and `litellm` to the LiteLLM socket.
-      - **Additional breakage:** it references `outerCfg.myOpt.searxng.<name>`, but **no `myOpt.searxng` option exists anywhere in the repo** and the enabling code is commented out at line ~159.
-      - `searxng` is also referenced in the container's `after`/`wants` list.
-      - Anything that forces `optionalAttrs cfg.modules.searxng.enable …` while `enabled` fails, because `outerCfg.myOpt.searxng.${name}` is evaluated eagerly in the `let`.
-      - It also uses `netnsCfg.path` and `.resolvConf`, which is **G1** again.
+      - **Remaining skeleton gaps:** `cfg.containerName`, `cfg.serviceName`, and `cfg.shared-run-dir` are still referenced without declared options in `options.myOpt.hermes-agent-compose`, `# myOpt.searxng` at line 134 is still commented out, and `outerCfg.myOpt.searxng.${name}` is referenced when `cfg.modules.searxng.enable or false` is true while `../searxng.nix` follows the `postgresql.nix` container-config shape without `.url` or `.serviceName`.
     - `frappe-v16-compose/` uses podman and is the largest thing in the repo, documented in [`frappe-v16-compose/HANDOVER.md`](frappe-v16-compose/HANDOVER.md).
 
   - Gotchas

@@ -22,9 +22,9 @@
 
   - Why it is unmaintained
     - `settings.model.{default,provider,base_url,api_mode}` and `settings.agent.{reasoning_effort,service_tier}` are set to **empty strings**, which are placeholders that will produce a non-functional client unless overridden.
-      - The commented-out version at the top of `hermes-agent-compose.nix` shows the intended shape with `provider = "openai"` and `base_url = "<litellm>/v1"`.
-    - The upstream home-manager module interface is still moving, and the system-side module that would back `services.hermes-agent` is not in this repo at all.
-    - It is the only consumer of the `hermes-agent` flake input, so **removing this file would make the input and the cachix substituter dead weight**, meaning you should decide both together.
+      - The `settings` apply in `nixos-base/services/hermes-agent.nix` (with `model.base_url` defaulted by `hermes-agent-compose.nix`) shows the `v0.21.7` shape with `provider = "custom"` and `base_url = "${litellmCfg.url}/v1"`.
+    - The upstream home-manager module interface is still moving, while container-side `services.hermes-agent` wiring now lives in `nixos-base/services/hermes-agent.nix`.
+    - Because `nixos-base/services/hermes-agent.nix` also imports `inputs.hermes-agent.nixosModules.default`, dropping this file alone no longer orphans the flake input or cachix substituter.
 
   - Gotchas
     - **Ordering and scope** matter because `services.hermes-agent` here is a *home-manager* service whose settings block would need a reachable LiteLLM endpoint that lives on the NixOS side as `myOpt.litellm`.

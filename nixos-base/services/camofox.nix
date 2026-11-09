@@ -1,38 +1,12 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.camofox;
-  secretKey = name: "${name}/camofox-envFile";
-  mkHttpUrl = host: port: let
-    bracketedHost =
-      if hasPrefix "[" host
-      then host
-      else if hasInfix ":" host
-      then "[${host}]"
-      else host;
-  in "http://${bracketedHost}:${toString port}";
-  toSliceUnit = p:
-    if p == null
-    then null
-    else if hasSuffix ".slice" p
-    then p
-    else "${p}.slice";
-  resolveNetns = nsName: let
-    entry = outerCfg.myOpt.netns.${nsName} or null;
-  in
-    if entry != null
-    then {
-      inherit (entry) path resolvConf unit;
-    }
-    else {
-      path = "/run/netns/${nsName}";
-      resolvConf = "/etc/netns/${nsName}/resolv.conf";
-      unit = "${nsName}.service";
-    };
 in {
   options.myOpt.camofox = mkOption {
     default = {};
@@ -44,9 +18,18 @@ in {
           type = types.bool;
           default = true;
         };
-        serviceName = mkOption {
+        modules.virtualisation.oci-containers.containers = mkOption {
+          type = types.anything;
+          default = {};
+        };
+        containerName = mkOption {
           type = types.singleLineStr;
           default = "${name}-camofox";
+        };
+        serviceName = mkOption {
+          type = types.singleLineStr;
+          default = outerCfg.virtualisation.oci-containers.containers.${cfg.containerName}.serviceName;
+          readOnly = true;
         };
         image = mkOption {
           type = types.singleLineStr;
@@ -61,103 +44,84 @@ in {
         };
         url = mkOption {
           type = types.singleLineStr;
-          default = mkHttpUrl cfg.host cfg.port;
+          default = "http://${pkgs.myLib.bracketIpv6 "${cfg.host}:${toString cfg.port}"}";
+          readOnly = true;
         };
         telemetry = mkOption {
           type = types.bool;
           default = true;
         };
+        envfile-key = mkOption {
+          type = types.nullOr types.singleLineStr;
+          default = "${name}/camofox-envFile";
+        };
         sopsFile = mkOption {
           type = types.nullOr types.anything;
-          default = null;
-        };
-        cgroup-parent = mkOption {
-          type = types.nullOr types.singleLineStr;
-          default = null;
-        };
-        networkNamespace = mkOption {
-          type = types.nullOr types.singleLineStr;
           default = null;
         };
         environment = mkOption {
           type = types.attrsOf types.str;
           default = {};
         };
+        environmentFiles = mkOption {
+          type = types.listOf types.str;
+          default = [];
+        };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
-        ${secretKey name} = optionalAttrs (cfg.sopsFile != null) {
-          inherit (cfg) sopsFile;
-        };
-      })
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg:
+        optionalAttrs (cfg.envfile-key != null) {
+          ${cfg.envfile-key} = optionalAttrs (cfg.sopsFile != null) {
+            inherit (cfg) sopsFile;
+          };
+        })
       enabled);
 
     virtualisation.oci-containers.backend = "podman";
-    virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (name: cfg: let
-        sliceUnit = toSliceUnit cfg.cgroup-parent;
-        ns =
-          if cfg.networkNamespace != null
-          then resolveNetns cfg.networkNamespace
-          else null;
-      in {
-        ${cfg.serviceName} = {
-          inherit (cfg) serviceName image;
-          autoStart = false;
-          networks = optional (ns != null) "ns:${ns.path}";
-          volumes = optional (ns != null) "${ns.resolvConf}:/etc/resolv.conf:ro";
-          environment =
-            {
-              CAMOFOX_BIND_HOST = cfg.host;
-              CAMOFOX_PORT = toString cfg.port;
-              CAMOFOX_CRASH_REPORT_ENABLED = boolToString cfg.telemetry;
-            }
-            // cfg.environment;
-          environmentFiles = [outerCfg.sops.secrets.${secretKey name}.path];
-          extraOptions =
-            [
-              "--shm-size=2g" # Firefox needs real shared memory; the default 64MB is not enough
+    virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.containerName} = mkMerge [
+          {
+            inherit (cfg) image;
+            serviceName = mkDefault cfg.containerName;
+            autoStart = false;
+            environment =
+              {
+                CAMOFOX_BIND_HOST = cfg.host;
+                CAMOFOX_PORT = toString cfg.port;
+                CAMOFOX_CRASH_REPORT_ENABLED = boolToString cfg.telemetry;
+              }
+              // cfg.environment;
+            environmentFiles =
+              optional (cfg.envfile-key != null) outerCfg.sops.secrets.${cfg.envfile-key}.path
+              ++ cfg.environmentFiles;
+            extraOptions = [
+              "--shm-size=2g"
               "--read-only"
               "--cap-drop=ALL"
               "--security-opt=no-new-privileges"
               "--pids-limit=512"
-            ]
-            ++ optional (sliceUnit != null) "--cgroup-parent=${sliceUnit}";
-        };
+            ];
+          }
+          cfg.modules.virtualisation.oci-containers.containers
+        ];
       })
       enabled);
 
-    systemd.services = mkMerge (mapAttrsToList (_: cfg: let
-        sliceUnit = toSliceUnit cfg.cgroup-parent;
-        ns =
-          if cfg.networkNamespace != null
-          then resolveNetns cfg.networkNamespace
-          else null;
-      in {
-        ${cfg.serviceName} = mkMerge [
-          {
-            serviceConfig = {
-              ProtectHome = true;
-              ProtectClock = true;
-              ProtectHostname = true;
-              ProtectKernelLogs = true;
-              ProtectKernelModules = true;
-              ProtectKernelTunables = true;
-              LockPersonality = true;
-              RestrictRealtime = true;
-              RestrictSUIDSGID = true;
-            };
-          }
-          (mkIf (ns != null) {
-            bindsTo = [ns.unit];
-            after = [ns.unit];
-          })
-          (mkIf (sliceUnit != null) {
-            serviceConfig.Slice = sliceUnit;
-          })
-        ];
+    systemd.services = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.serviceName}.serviceConfig = {
+          ProtectHome = true;
+          ProtectClock = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          LockPersonality = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+        };
       })
       enabled);
   };

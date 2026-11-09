@@ -58,8 +58,7 @@
     - These are found by grepping for `myOpt.sleep-on-idle`.
     - `services/proxy-compose.nix` creates an instance per published app with id `cfg.sleep-on-idle-id`.
     - `services/squid.nix` puts the squid unit and its two proxyd units in a slice.
-    - `services/litellm.nix` uses it optionally via `cfg.sleep-on-idle`.
-    - `services/compose/*-compose.nix` uses it for n8n, plausible, frappe, keycloak and chatwoot.
+    - `services/compose/*-compose.nix` uses it for n8n, plausible, frappe, keycloak, hermes-agent and chatwoot.
     - `services/compose/frappe-v16-compose/frappe-compose.nix` also references `myOpt.sleep-on-idle.<id>.endpoints.default.proxy.name` inside the netns's `set-network-namespace.systemd-services`, so it needs the instance to exist with a `default` endpoint.
       - That is a **cross-module read of a declared option**, so changing the sleep-on-idle option shape breaks frappe.
 
