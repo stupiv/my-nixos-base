@@ -46,10 +46,6 @@ in {
           default = "http://${pkgs.myLib.bracketIpv6 "${cfg.host}:${toString cfg.port}"}";
           readOnly = true;
         };
-        telemetry = mkOption {
-          type = types.bool;
-          default = true;
-        };
         settings = mkOption {
           type = types.anything;
           default = {};
@@ -86,19 +82,7 @@ in {
               inherit (cfg) stateDir host port settings environmentFile;
               enable = true;
               environment =
-                mapAttrs (_: mkDefault) (
-                  if cfg.telemetry
-                  then {
-                    SCARF_NO_ANALYTICS = "False";
-                    DO_NOT_TRACK = "False";
-                    ANONYMIZED_TELEMETRY = "True";
-                  }
-                  else {
-                    SCARF_NO_ANALYTICS = "True";
-                    DO_NOT_TRACK = "True";
-                    ANONYMIZED_TELEMETRY = "False";
-                  }
-                )
+                mapAttrs (_: mkDefault) {}
                 // cfg.environment;
             }
             cfg.modules.services.litellm

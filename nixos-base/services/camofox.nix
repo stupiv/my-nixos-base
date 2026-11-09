@@ -47,10 +47,6 @@ in {
           default = "http://${pkgs.myLib.bracketIpv6 "${cfg.host}:${toString cfg.port}"}";
           readOnly = true;
         };
-        telemetry = mkOption {
-          type = types.bool;
-          default = true;
-        };
         envfile-key = mkOption {
           type = types.nullOr types.singleLineStr;
           default = "${name}/camofox-envFile";
@@ -91,7 +87,6 @@ in {
               {
                 CAMOFOX_BIND_HOST = cfg.host;
                 CAMOFOX_PORT = toString cfg.port;
-                CAMOFOX_CRASH_REPORT_ENABLED = boolToString cfg.telemetry;
               }
               // cfg.environment;
             environmentFiles =

@@ -59,10 +59,6 @@ in {
           type = types.singleLineStr;
           default = name;
         };
-        telemetry = mkOption {
-          type = types.bool;
-          default = true;
-        };
       };
     }));
   };
@@ -126,7 +122,6 @@ in {
         cfg.modules.camofox
         {
           enable = true;
-          telemetry = mkDefault cfg.telemetry;
         }
       ]))
     enabled;
@@ -142,7 +137,6 @@ in {
         cfg.modules.litellm
         {
           enable = true;
-          telemetry = mkDefault cfg.telemetry;
           container = {
             name = cfg.containerName;
             inherit (cfg) shared-run-dir;
@@ -168,10 +162,6 @@ in {
           };
           settings = {
             model.base_url = mkDefault "${litellmCfg.url}/v1";
-            telemetry.shared_metrics = {
-              enabled = mkDefault cfg.telemetry;
-              send = mkDefault cfg.telemetry;
-            };
           };
           environment =
             {
