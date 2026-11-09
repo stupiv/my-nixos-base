@@ -49,7 +49,7 @@
     - `zen-browser-flake` comes from `0xc000022070/zen-browser-flake`, is home-manager only, and has `nixGL` enabled.
     - `nixos-hardware` comes from `NixOS/nixos-hardware` and is **not referenced by any module**, being intended for `install/nixos-hardware.nix`.
     - `oisd` comes from `sjhgvr/oisd` with `flake = false` and is `readFile`d by `nixos-base/dnscrypt/filter.nix`.
-    - `hermes-agent` is pinned to `NousResearch/hermes-agent/v0.21.7`, is only used by an **unimported** file, and carries the comment "No inputs follows for cache to work".
+    - `hermes-agent` is pinned to `NousResearch/hermes-agent/v0.21.7`, is used by `nixos-base/services/hermes-agent.nix` and `laptop-base/home-manager/unmaintained/hermes-agent.nix`, and carries the comment "No inputs follows for cache to work".
     - There is no CI, no formatter/treefmt config, no `README`, and `.gitignore` is empty.
     - Formatting is hand-maintained and consistently looks like `alejandra` output (2-space, one-arg-per-line), so **⚠ verify** which formatter is expected before mass-reformatting.
 
@@ -93,10 +93,9 @@
 
   - Known issues across the repo
     - These are ordered roughly by how likely they are to bite, and each is repeated in the relevant sub-handover.
-    - **G1 — `netns` option shape vs. its consumers.**
-      - `nixos-base/services/netns.nix` exposes `nsPath` and `serviceUnit`, but `camofox.nix`, `fastcrw.nix` and `litellm.nix` each carry a local `resolveNetns` that reads `entry.path`, `entry.resolvConf` and `entry.unit`.
-      - Those attributes do not exist, so as soon as an instance *declares* `myOpt.netns.<name>`, evaluation fails instead of taking the `/run/netns/...` fallback.
-      - The fix is either to add `path`/`resolvConf`/`unit` aliases to `netns.nix` or to change the three call sites.
+    - **G1 — `netns` option shape vs. external netns consumers (resolved in `camofox.nix`, `fastcrw.nix` and `litellm.nix`).**
+      - `nixos-base/services/netns.nix` exposes `nsPath` and `serviceUnit`, while `camofox.nix`, `fastcrw.nix` and `litellm.nix` previously carried local helpers reading non-existent `entry.path`, `entry.resolvConf` and `entry.unit`.
+      - Those three services now leave `myOpt.netns` and `myOpt.sleep-on-idle` wiring to compose modules via `set-network-namespace` and `set-cgroup-parent`, eliminating the latent `path` evaluation error.
       - Maintainer intent recorded on 2026-11-07 is that `myOpt.netns` namespaces are deliberately left with no DNS and no Internet reach, so the absent resolver wiring is not itself a connectivity defect.
     - **G2 — `install/` is orphaned.**
       - Nothing imports it, and three of its six files are *intentional* `throw`s or placeholders, namely `reminders.nix`, `nixos-hardware.nix` and the commented `stateVersion`.
@@ -128,5 +127,5 @@
     - `git log` is a single squashed commit, so **there is no useful history here** and the tree is the source of truth.
     - Read `nixos-base/default.nix` and `laptop-base/default.nix` first, because those two import lists *are* the table of contents.
     - Reproduce a build on a machine with Nix before changing anything, keeping in mind that `nix flake check` will evaluate both modules but cannot catch the `myOpt.admin.*` gaps that only appear when a host imports them.
-    - Resolve **G1** and **G4** first, since they are the two that turn a fresh checkout into an evaluation error.
+    - Resolve **G4** first, since it is the remaining global issue that turns a fresh laptop evaluation into an evaluation error.
     - The sandbox that produced these files had **no network access to `cache.nixos.org`**, so no substitution or build was attempted and all statements about runtime behaviour come from reading the units and services rather than running them.
