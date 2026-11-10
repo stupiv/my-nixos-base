@@ -18,25 +18,28 @@ in {
           type = types.bool;
           default = true;
         };
-        modules.services.hermes-agent = mkOption {
-          type = types.anything;
-          default = {};
+        modules = {
+          services.hermes-agent = mkOption {
+            type = types.anything;
+          };
         };
-        container = mkOption {
-          type = types.anything;
-          default = {};
-        };
-        extra-users = mkOption {
-          type = types.listOf types.singleLineStr;
-          default = [];
-        };
-        user = mkOption {
+        container.name = mkOption {
           type = types.singleLineStr;
-          default = "hermes-${name}";
         };
-        group = mkOption {
-          type = types.singleLineStr;
-          default = "hermes-${name}";
+        hermes-agent-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.containers.${cfg.container.name}.config.services.hermes-agent;
+          readOnly = true;
+        };
+        host = mkOption {
+          type = types.anything;
+          default = cfg.hermes-agent-cfg.backend.host;
+          readOnly = true;
+        };
+        port = mkOption {
+          type = types.anything;
+          default = cfg.hermes-agent-cfg.backend.port;
+          readOnly = true;
         };
         uid = mkOption {
           type = types.int;
@@ -47,51 +50,11 @@ in {
         stateDir = mkOption {
           type = types.singleLineStr;
         };
-        port = mkOption {
-          type = types.port;
+        sleep-on-idle-id = mkOption {
+          type = types.nullOr types.singleLineStr;
         };
-        unix-socket = mkOption {
-          type = types.singleLineStr;
-          default = "${cfg.container.shared-run-dir}/hermes-agent.sock";
-          readOnly = true;
-        };
-        host = mkOption {
-          type = types.singleLineStr;
-          default = "::1";
-          readOnly = true;
-        };
-        environment = mkOption {
-          type = types.attrsOf types.str;
-          default = {};
-        };
-        environmentFiles = mkOption {
-          type = types.listOf types.str;
-          default = [];
-        };
-        settings = mkOption {
-          type = types.anything;
-          default = {};
-          apply = userSettings:
-            recursiveUpdate {
-              web = {
-                backend = "firecrawl";
-                search_backend = "firecrawl";
-                extract_backend = "firecrawl";
-              };
-              browser.cloud_provider = "camofox";
-              display.busy_input_mode = "steer";
-              model = {
-                default = "";
-                provider = "custom";
-                api_mode = "";
-              };
-              agent = {
-                reasoning_effort = "none";
-                service_tier = "";
-              };
-              moa.presets.default.enabled = false;
-            }
-            userSettings;
+        netns-id = mkOption {
+          type = types.nullOr types.singleLineStr;
         };
       };
     }));
@@ -99,80 +62,64 @@ in {
 
   config = mkIf (enabled != {}) {
     containers = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.container.name}.config = {config, ...}: let
-          innerCfg = config;
-          serviceHardening = {
-            NoNewPrivileges = true;
-            PrivateTmp = true;
-            PrivateDevices = true;
-            ProtectSystem = "strict";
-            ProtectHome = mkForce true;
-            ProtectClock = true;
-            ProtectControlGroups = true;
-            ProtectHostname = true;
-            ProtectKernelLogs = true;
-            ProtectKernelModules = true;
-            ProtectKernelTunables = true;
-            ProtectProc = "invisible";
-            ReadWritePaths = [cfg.stateDir];
-            CapabilityBoundingSet = "";
-            AmbientCapabilities = "";
-            LockPersonality = true;
-            RestrictAddressFamilies = [
-              "AF_INET"
-              "AF_INET6"
-              "AF_UNIX"
+        ${cfg.container.name} = {
+          extraFlags = [
+            "--bind=${cfg.stateDir}:${cfg.hermes-agent-cfg.stateDir}:idmap"
+          ];
+          config = {config, ...}: let
+            innerCfg = config;
+          in {
+            imports = [
+              inputs.hermes-agent.nixosModules.default
             ];
-            RestrictNamespaces = true;
-            RestrictRealtime = true;
-            RestrictSUIDSGID = true;
-            SystemCallArchitectures = "native";
-            SystemCallFilter = [
-              "@system-service"
-              "~@privileged"
+            users.groups.${cfg.hermes-agent-cfg.group}.gid = cfg.gid;
+            users.users.${cfg.hermes-agent-cfg.user}.uid = cfg.uid;
+            programs.nix-ld.enable = false;
+            services.hermes-agent = mkMerge [
+              cfg.modules.services.hermes-agent
+              {
+                enable = true;
+                backend = {
+                  inherit (cfg.modules.services.hermes-agent.backend) port;
+                  mode = mkDefault "serve";
+                  host = mkDefault "::1";
+                };
+                settings = {
+                  display.busy_input_mode = mkDefault "steer";
+                  model = {
+                    default = mkDefault "";
+                    provider = mkDefault "custom";
+                    api_mode = mkDefault "";
+                  };
+                  agent = {
+                    reasoning_effort = mkDefault "none";
+                    service_tier = mkDefault "";
+                  };
+                  moa.presets.default.enabled = mkDefault false;
+                };
+              }
             ];
           };
-        in {
-          imports = [
-            inputs.hermes-agent.nixosModules.default
-            ./systemd-socket-proxyd.nix
-          ];
-          users.groups.${cfg.group}.gid = cfg.gid;
-          users.users.${cfg.user}.uid = cfg.uid;
-
-          myOpt.systemd-socket-proxyd.${name} = {
-            origin = {
-              host = innerCfg.services.hermes-agent.backend.host;
-              port = innerCfg.services.hermes-agent.backend.port;
-              serviceName =
-                if innerCfg.services.hermes-agent.backend.mode != "none"
-                then "hermes-backend"
-                else "hermes-agent";
-            };
-            proxy.ip-socket = cfg.unix-socket;
-          };
-          services.hermes-agent = mkMerge [
-            {
-              inherit (cfg) user group stateDir settings environment environmentFiles;
-              enable = true;
-              addToSystemPackages = mkDefault true;
-              backend = {
-                inherit (cfg) host port;
-                mode = mkDefault "serve";
-              };
-            }
-            cfg.modules.services.hermes-agent
-          ];
-          systemd.services = mkMerge [
-            {
-              hermes-agent.serviceConfig = serviceHardening;
-            }
-            (mkIf (innerCfg.services.hermes-agent.backend.mode != "none") {
-              hermes-backend.serviceConfig = serviceHardening;
-            })
-          ];
         };
       })
       enabled);
+
+    myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.netns-id}.set-network-namespace = {
+          nixos-containers = [
+            cfg.container.name
+          ];
+        };
+      })
+      (fiterAttrs (_: cfg: cfg.netns-id != null) enabled));
+
+    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
+          nixos-containers = [
+            cfg.container.name
+          ];
+        };
+      })
+      (fiterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
   };
 }

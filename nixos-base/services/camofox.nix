@@ -18,45 +18,24 @@ in {
           type = types.bool;
           default = true;
         };
-        modules.virtualisation.oci-containers.containers = mkOption {
-          type = types.submodule ({...}: {
-            freeformType = types.anything;
-            options = {
-              image = mkOption {
-                type = types.anything;
-                # See https://github.com/jo-inc/camofox-browser/pkgs/container/camofox-browser
-              };
-              environment = mkOption {
-                freeformType = types.anything;
-                type = types.submodule ({...}: {
-                  options = {
-                    CAMOFOX_BIND_HOST = mkOption {
-                      type = types.anything;
-                    };
-                    CAMOFOX_PORT = mkOption {
-                      type = types.anything;
-                    };
-                    HTTP_PROXY = mkOption {
-                      type = types.strMatching "^http.+[^/]$";
-                    };
-                    HTTPS_PROXY = mkOption {
-                      type = types.strMatching "^http.+[^/]$";
-                    };
-                    NO_PROXY = mkOption {
-                      type = types.singleLineStr;
-                      default = "localhost,127.0.0.1,::1";
-                    };
-                  };
-                });
-              };
-            };
-          });
+        modules = {
+          virtualisation.oci-containers.containers = mkOption {
+            type = types.anything;
+          };
         };
-        netns-id = mkOption {
+        set-env-vars = mkOption {
           type = types.anything;
+        };
+        oci-container-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.virtualisation.oci-containers.containers.${cfg.container.name};
+          readOnly = true;
         };
         sleep-on-idle-id = mkOption {
-          type = types.anything;
+          type = types.nullOr types.singleLineStr;
+        };
+        netns-id = mkOption {
+          type = types.nullOr types.singleLineStr;
         };
         oci-container.name = mkOption {
           type = types.anything;
@@ -90,7 +69,11 @@ in {
         ${cfg.oci-container.name} = mkMerge [
           cfg.modules.virtualisation.oci-containers.containers
           {
+            inherit (cfg.modules.virtualisation.oci-containers.containers) image;
             autoStart = false;
+            environment = {
+              inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
+            };
             environmentFiles = [
               cfg.sops.envfile.cfg.path
             ];
@@ -100,9 +83,22 @@ in {
               "--cap-drop=ALL"
               "--security-opt=no-new-privileges"
               "--pids-limit=512"
-            ];
+            ] ++ optional (cfg.netns-id == null) "--network=host";
           }
         ];
+      })
+      enabled);
+
+    myOpt.set-env-vars = mkMerge (mapAttrsToList (name: cfg: let
+        inherit (pkgs.myLib) bracketIpv6;
+        inherit (oci-container-cfg.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
+      in {
+        "camofox-${name}" = {
+          inherit (cfg.set-env-vars) systemd-services nixos-containers oci-containers;
+          environment = {
+            CAMOFOX_URL = "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
+          };
+        };
       })
       enabled);
 
@@ -113,7 +109,7 @@ in {
           ];
         };
       })
-      enabled);
+      (fiterAttrs (_: cfg: cfg.netns-id != null) enabled));
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
@@ -122,6 +118,6 @@ in {
           ];
         };
       })
-      enabled);
+      (fiterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
   };
 }
