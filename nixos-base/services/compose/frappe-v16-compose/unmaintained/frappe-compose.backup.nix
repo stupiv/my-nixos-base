@@ -195,9 +195,9 @@ in {
             type = types.singleLineStr;
             default = "${name}-websocket";
           };
-          envfile-key = mkOption {
+          envFile-key = mkOption {
             type = types.singleLineStr;
-            default = "${name}/frappe_envfile";
+            default = "${name}/frappe_envFile";
             # INIT_ADMIN_PASSWORD=
             # DB_PASSWORD=
           };
@@ -211,9 +211,9 @@ in {
             type = types.singleLineStr;
             example = "/var/lib/test/frappe_v16/mariadb_v12";
           };
-          envfile-key = mkOption {
+          envFile-key = mkOption {
             type = types.singleLineStr;
-            default = "${name}/mariadb_envfile";
+            default = "${name}/mariadb_envFile";
             # MARIADB_ROOT_PASSWORD=
           };
           containerName = mkOption {
@@ -273,8 +273,8 @@ in {
 
     sops.secrets = mkMerge (mapAttrsToList (
         name: cfg: {
-          ${cfg.frappe.envfile-key} = {};
-          ${cfg.mariadb.envfile-key} = {};
+          ${cfg.frappe.envFile-key} = {};
+          ${cfg.mariadb.envFile-key} = {};
         }
       )
       enabled);
@@ -365,7 +365,7 @@ in {
           frappe_base = {
             inherit autoStart;
             inherit (cfg.frappe.base) image;
-            environmentFiles = [config.sops.secrets.${cfg.frappe.envfile-key}.path];
+            environmentFiles = [config.sops.secrets.${cfg.frappe.envFile-key}.path];
             user = "1000:1000";
             workdir = in-container-bench-dir;
             extraOptions = ["--tmpfs" "${in-container-bench-dir}/config:rw,mode=0700,U"];
@@ -384,7 +384,7 @@ in {
           ${cfg.mariadb.containerName} = {
             inherit autoStart;
             inherit (cfg.mariadb) image;
-            environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
+            environmentFiles = [config.sops.secrets.${cfg.mariadb.envFile-key}.path];
             cmd = [
               "--character-set-server=utf8mb4"
               "--collation-server=utf8mb4_unicode_ci"

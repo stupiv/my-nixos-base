@@ -59,23 +59,23 @@ in {
             example = "/var/lib/<name>/valkey_v8";
           };
         };
-        chatwoot.envfile-key = mkOption {
+        chatwoot.envFile-key = mkOption {
           type = types.singleLineStr;
-          default = "${name}/chatwoot_envfile";
+          default = "${name}/chatwoot_envFile";
           # https://raw.githubusercontent.com/chatwoot/chatwoot/develop/.env.example
           ## SECRET_KEY_BASE=
-          # These take from valkey and pgvector envfile
+          # These take from valkey and pgvector envFile
           ## REDIS_PASSWORD=
           ## POSTGRES_PASSWORD=
         };
-        valkey.envfile-key = mkOption {
+        valkey.envFile-key = mkOption {
           type = types.singleLineStr;
-          default = "${name}/valkey_envfile";
+          default = "${name}/valkey_envFile";
           # REDIS_PASSWORD=
         };
-        pgvector.envfile-key = mkOption {
+        pgvector.envFile-key = mkOption {
           type = types.singleLineStr;
-          default = "${name}/pgvector_envfile";
+          default = "${name}/pgvector_envFile";
           # POSTGRES_PASSWORD=
         };
         chatwoot.socket-folder = mkOption {
@@ -130,9 +130,9 @@ in {
   config = {
     sops.secrets = mkMerge (mapAttrsToList (
         name: cfg: {
-          ${cfg.chatwoot.envfile-key} = {};
-          ${cfg.pgvector.envfile-key} = {};
-          ${cfg.valkey.envfile-key} = {};
+          ${cfg.chatwoot.envFile-key} = {};
+          ${cfg.pgvector.envFile-key} = {};
+          ${cfg.valkey.envFile-key} = {};
         }
       )
       enabled-chatwoot-compose);
@@ -182,9 +182,9 @@ in {
             inherit autoStart;
             inherit (cfg.chatwoot) image;
             environmentFiles = [
-              config.sops.secrets.${cfg.chatwoot.envfile-key}.path
-              config.sops.secrets.${cfg.pgvector.envfile-key}.path
-              config.sops.secrets.${cfg.valkey.envfile-key}.path
+              config.sops.secrets.${cfg.chatwoot.envFile-key}.path
+              config.sops.secrets.${cfg.pgvector.envFile-key}.path
+              config.sops.secrets.${cfg.valkey.envFile-key}.path
             ];
             dependsOn = [cfg.pgvector.serviceName cfg.valkey.serviceName];
             environment = {
@@ -238,7 +238,7 @@ in {
           ${cfg.pgvector.serviceName} = rec {
             inherit autoStart;
             inherit (cfg.pgvector) image serviceName;
-            environmentFiles = [config.sops.secrets.${cfg.pgvector.envfile-key}.path];
+            environmentFiles = [config.sops.secrets.${cfg.pgvector.envFile-key}.path];
             environment = {
               inherit POSTGRES_USER POSTGRES_DB;
               PGDATA = "/var/lib/postgresql/data";
@@ -259,7 +259,7 @@ in {
           ${cfg.valkey.serviceName} = {
             inherit autoStart;
             inherit (cfg.valkey) image serviceName;
-            environmentFiles = [config.sops.secrets.${cfg.valkey.envfile-key}.path];
+            environmentFiles = [config.sops.secrets.${cfg.valkey.envFile-key}.path];
             entrypoint = "sh";
             cmd = [
               "-c"

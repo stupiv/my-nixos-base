@@ -18,7 +18,7 @@ in {
           type = types.bool;
           default = true;
         };
-        environmnet = mkOption {
+        environment = mkOption {
           type = types.attrsOf types.singleLineStr;
         };
         systemd-services = mkOption {

@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
@@ -26,6 +27,10 @@ in {
             type = types.anything;
           };
         };
+        container.name = mkOption {
+          type = types.singleLineStr;
+          default = name;
+        };
         sopsFile = mkOption {
           type = types.anything;
         };
@@ -38,57 +43,60 @@ in {
           default = null;
           readOnly = true;
         };
-        hermes-agent-cfg = mkOption {
+        hermes-agent-id = mkOption {
           type = types.anything;
-          default = outerCfg.myOpt.hermes-agent;
-          readOnly = true;
+          default = name;
         };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
-    myOpt.hermes-agent = mapAttrs' (name: cfg:
-      nameValuePair name (mkMerge [
-        cfg.modules.hermes-agent
-        {
-          enable = true;
-          inherit (cfg) sleep-on-idle-id netns-id;
-          container = {
-            inherit (cfg.container) name;
-          };
-          modules.service.hermes-agent.settings = {
-            browser.cloud_provider = "camofox";
-          };
-        }
-      ]))
-    enabled;
-
-    myOpt.camofox = mapAttrs' (name: cfg:
-      nameValuePair name (mkMerge [
-        cfg.modules.camofox
-        {
-          enable = true;
-          inherit (cfg) sleep-on-idle-id netns-id;
-          oci-container.name = "camofox-${name}";
-          set-env-vars = {
-            systemd-services = [];
-            oci-containers = [];
-            nixos-containers = [cfg.container.name];
-          };
-        }
-      ]))
-    enabled;
-
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sleep-on-idle-id} = mkMerge [
           cfg.modules.sleep-on-idle
           {
             enable = true;
             health-check.path = "/";
-            endpoints.default = {
-              inherit (hermes-agent-cfg) host port;
+            endpoints.default.origin = {
+              inherit (outerCfg.myOpt.hermes-agent.${cfg.hermes-agent-id}) host port;
             };
+          }
+        ];
+      })
+      enabled);
+
+    myOpt.hermes-agent = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.hermes-agent-id} = mkMerge [
+          cfg.modules.hermes-agent
+          {
+            enable = true;
+            inherit (cfg) sleep-on-idle-id netns-id;
+            container = {
+              inherit (cfg.container) name;
+            };
+            modules.services.hermes-agent.settings = {
+              browser.cloud_provider = "camofox";
+            };
+            sops.dotenv = {inherit (cfg) sopsFile;};
+          }
+        ];
+      })
+      enabled);
+
+    myOpt.camofox = mkMerge (mapAttrsToList (name: cfg: {
+        ${name} = mkMerge [
+          cfg.modules.camofox
+          {
+            enable = true;
+            inherit (cfg) sleep-on-idle-id netns-id;
+            oci-container.name = "camofox-${name}";
+            modules.set-env-vars = {
+              systemd-services = [];
+              oci-containers = [];
+              nixos-containers = [cfg.container.name];
+            };
+            sops.dotenv = {inherit (cfg) sopsFile;};
           }
         ];
       })

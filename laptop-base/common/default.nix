@@ -1,5 +1,5 @@
 {
   imports = [
-    ./nixpkgs-overlays.nix
+    ./nix.nix
   ];
 }

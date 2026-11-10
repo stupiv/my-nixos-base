@@ -99,8 +99,8 @@ in {
 
     sops.secrets = mkMerge (mapAttrsToList (
         name: cfg: {
-          ${cfg.frappe.envfile-key} = {inherit (cfg) sopsFile;};
-          ${cfg.mariadb.envfile-key} = {inherit (cfg) sopsFile;};
+          ${cfg.frappe.envFile-key} = {inherit (cfg) sopsFile;};
+          ${cfg.mariadb.envFile-key} = {inherit (cfg) sopsFile;};
         }
       )
       enabled);
@@ -238,7 +238,7 @@ in {
               {
                 inherit (cfg.mariadb) image;
                 user = "999:999";
-                environmentFiles = [config.sops.secrets.${cfg.mariadb.envfile-key}.path];
+                environmentFiles = [config.sops.secrets.${cfg.mariadb.envFile-key}.path];
                 environment.MARIADB_AUTO_UPGRADE = "1";
                 extraOptions = [
                   "--pids-limit=512"
@@ -293,7 +293,7 @@ in {
                 dependsOn = [cfg.frappe.configurator.containerName];
                 entrypoint = "bash";
                 environmentFiles = optionals (!cfg.frappe.readOnlyMode) [
-                  config.sops.secrets.${cfg.frappe.envfile-key}.path
+                  config.sops.secrets.${cfg.frappe.envFile-key}.path
                 ];
                 environment = {
                   SITE = cfg.frappe.siteName;

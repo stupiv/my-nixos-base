@@ -69,7 +69,7 @@ in {
             type = types.anything;
             default = {};
           };
-          envfile-key = mkOption {
+          envFile-key = mkOption {
             type = types.nullOr types.singleLineStr;
             default = null;
           };
@@ -79,7 +79,7 @@ in {
   };
 
   config = {
-    sops.secrets = mapAttrs' (tunnel-id: cfg: (nameValuePair cfg.n8n.envfile-key {})) (filterAttrs (_: cfg: (cfg.n8n.envfile-key != null)) enabled);
+    sops.secrets = mapAttrs' (tunnel-id: cfg: (nameValuePair cfg.n8n.envFile-key {})) (filterAttrs (_: cfg: (cfg.n8n.envFile-key != null)) enabled);
 
     myOpt.proxy-compose =
       mapAttrs' (name: cfg: (nameValuePair name (mkMerge [
@@ -113,8 +113,8 @@ in {
           ${cfg.n8n.containerName} = {
             autoStart = false;
             inherit (cfg.n8n) serviceName image;
-            environmentFiles = optionals (cfg.n8n.envfile-key != null) [
-              config.sops.secrets.${cfg.n8n.envfile-key}.path
+            environmentFiles = optionals (cfg.n8n.envFile-key != null) [
+              config.sops.secrets.${cfg.n8n.envFile-key}.path
             ];
             environment = mkMerge [
               cfg.n8n.environment

@@ -56,15 +56,39 @@ in {
         netns-id = mkOption {
           type = types.nullOr types.singleLineStr;
         };
+        sops.dotenv = {
+          key = mkOption {
+            type = types.anything;
+          };
+          sopsFile = mkOption {
+            type = types.anything;
+          };
+          path = mkOption {
+            type = types.strMatching "^${cfg.runDir}/.*[^/]$";
+            default = "${cfg.runDir}/.env";
+          };
+        };
+        runDir = mkOption {
+          type = types.strMatching "^/run/[^/]+/.*[^/]$";
+          default = "/run/${name}/camofox";
+        };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
+    sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.sops.dotenv.key} = {
+          inherit (cfg.sops.dotenv) sopsFile path;
+        };
+      })
+      enabled);
+
     containers = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.container.name} = {
           extraFlags = [
             "--bind=${cfg.stateDir}:${cfg.hermes-agent-cfg.stateDir}:idmap"
+            "--bind=${cfg.runDir}:${cfg.runDir}:rootidmap"
           ];
           config = {config, ...}: let
             innerCfg = config;
@@ -79,6 +103,7 @@ in {
               cfg.modules.services.hermes-agent
               {
                 enable = true;
+                environmentFiles = [cfg.sops.dotenv.path];
                 backend = {
                   inherit (cfg.modules.services.hermes-agent.backend) port;
                   mode = mkDefault "serve";
@@ -111,7 +136,7 @@ in {
           ];
         };
       })
-      (fiterAttrs (_: cfg: cfg.netns-id != null) enabled));
+      (filterAttrs (_: cfg: cfg.netns-id != null) enabled));
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
@@ -120,6 +145,6 @@ in {
           ];
         };
       })
-      (fiterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
+      (filterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
   };
 }

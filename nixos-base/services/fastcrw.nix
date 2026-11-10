@@ -54,10 +54,10 @@ in {
         package = mkOption {
           type = types.package;
         };
-        sops.envfile = {
+        sops.envFile = {
           cfg = mkOption {
             type = types.anything;
-            default = outerCfg.sops.secrets.${cfg.sops.envfile.key};
+            default = outerCfg.sops.secrets.${cfg.sops.envFile.key};
             readOnly = true;
           };
           key = mkOption {
@@ -72,8 +72,8 @@ in {
   };
   config = mkIf (enabled != {}) {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.sops.envfile.key} = {
-          inherit (cfg.sops.envfile) sopsFile;
+        ${cfg.sops.envFile.key} = {
+          inherit (cfg.sops.envFile) sopsFile;
         };
       })
       enabled);
@@ -138,7 +138,7 @@ in {
             serviceConfig = {
               ExecStart = "${cfg.package}/bin/crw-server";
               EnvironmentFile = [
-                cfg.sops.envfile.cfg.path
+                cfg.sops.envFile.cfg.path
               ];
             };
           }

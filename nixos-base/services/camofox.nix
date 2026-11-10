@@ -20,16 +20,34 @@ in {
         };
         modules = {
           virtualisation.oci-containers.containers = mkOption {
+            type = types.submodule ({...}: {
+              freeformType = types.anything;
+              options = {
+                environment = mkOption {
+                  type = types.submodule ({...}: {
+                    freeformType = types.anything;
+                    options = {
+                      CAMOFOX_BIND_HOST = mkOption {
+                        type = types.singleLineStr;
+                        default = "::1";
+                      };
+                      CAMOFOX_PORT = mkOption {
+                        type = types.singleLineStr;
+                        default = toString cfg.port;
+                        readOnly = true;
+                      };
+                    };
+                  });
+                };
+              };
+            });
+          };
+          set-env-vars = mkOption {
             type = types.anything;
           };
         };
-        set-env-vars = mkOption {
-          type = types.anything;
-        };
-        oci-container-cfg = mkOption {
-          type = types.anything;
-          default = outerCfg.virtualisation.oci-containers.containers.${cfg.container.name};
-          readOnly = true;
+        port = mkOption {
+          type = types.port;
         };
         sleep-on-idle-id = mkOption {
           type = types.nullOr types.singleLineStr;
@@ -40,12 +58,7 @@ in {
         oci-container.name = mkOption {
           type = types.anything;
         };
-        sops.envfile = {
-          cfg = mkOption {
-            type = types.anything;
-            default = outerCfg.sops.secrets.${cfg.sops.envfile.key};
-            readOnly = true;
-          };
+        sops.dotenv = {
           key = mkOption {
             type = types.anything;
           };
@@ -59,8 +72,8 @@ in {
 
   config = mkIf (enabled != {}) {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.sops.envfile.key} = {
-          inherit (cfg.sops.envfile) sopsFile;
+        ${cfg.sops.dotenv.key} = {
+          inherit (cfg.sops.dotenv) sopsFile;
         };
       })
       enabled);
@@ -71,19 +84,18 @@ in {
           {
             inherit (cfg.modules.virtualisation.oci-containers.containers) image;
             autoStart = false;
-            environment = {
-              inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
-            };
             environmentFiles = [
-              cfg.sops.envfile.cfg.path
+              outerCfg.sops.secrets.${cfg.sops.dotenv.key}.path
             ];
-            extraOptions = [
-              "--shm-size=2g"
-              "--read-only"
-              "--cap-drop=ALL"
-              "--security-opt=no-new-privileges"
-              "--pids-limit=512"
-            ] ++ optional (cfg.netns-id == null) "--network=host";
+            extraOptions =
+              [
+                "--shm-size=2g"
+                "--read-only"
+                "--cap-drop=ALL"
+                "--security-opt=no-new-privileges"
+                "--pids-limit=512"
+              ]
+              ++ optional (cfg.netns-id == null) "--network=host";
           }
         ];
       })
@@ -91,14 +103,16 @@ in {
 
     myOpt.set-env-vars = mkMerge (mapAttrsToList (name: cfg: let
         inherit (pkgs.myLib) bracketIpv6;
-        inherit (oci-container-cfg.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
+        inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
       in {
-        "camofox-${name}" = {
-          inherit (cfg.set-env-vars) systemd-services nixos-containers oci-containers;
-          environment = {
-            CAMOFOX_URL = "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
-          };
-        };
+        "camofox-${name}" = mkMerge [
+          cfg.modules.set-env-vars
+          {
+            environment = {
+              CAMOFOX_URL = "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
+            };
+          }
+        ];
       })
       enabled);
 
@@ -109,7 +123,7 @@ in {
           ];
         };
       })
-      (fiterAttrs (_: cfg: cfg.netns-id != null) enabled));
+      (filterAttrs (_: cfg: cfg.netns-id != null) enabled));
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
@@ -118,6 +132,6 @@ in {
           ];
         };
       })
-      (fiterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
+      (filterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
   };
 }

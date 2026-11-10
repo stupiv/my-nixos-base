@@ -162,9 +162,9 @@ in {
             type = types.singleLineStr;
             default = "${name}-websocket";
           };
-          envfile-key = mkOption {
+          envFile-key = mkOption {
             type = types.singleLineStr;
-            default = "${name}/frappe_envfile";
+            default = "${name}/frappe_envFile";
             # INIT_ADMIN_PASSWORD=
             # DB_PASSWORD=
           };
@@ -178,9 +178,9 @@ in {
             type = types.singleLineStr;
             example = "/var/lib/${name}/mariadb";
           };
-          envfile-key = mkOption {
+          envFile-key = mkOption {
             type = types.singleLineStr;
-            default = "${name}/mariadb_envfile";
+            default = "${name}/mariadb_envFile";
             # MARIADB_ROOT_PASSWORD=
           };
           containerName = mkOption {

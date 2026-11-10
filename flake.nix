@@ -4,7 +4,7 @@
     nixpkgs-2605.url = "github:nixos/nixpkgs/7dcdd87373d72e7a2173e4db02e20d3d7f495cfd"; # See https://channels.nixos.org/nixos-26.05/git-revision
 
     nixpkgs-2611.url = "github:nixos/nixpkgs/3ec636362e1816bc2f0888fa0fa2c69f1bc9e504"; # See https://channels.nixos.org/nixos-unstable/git-revision
-    hermes-agent.url = "github:NousResearch/hermes-agent/v0.21.7"; # No inputs follows for cache to work
+    hermes-agent.url = "github:NousResearch/hermes-agent/v0.23.1"; # See https://github.com/NousResearch/hermes-agent/tags # No inputs.nixpkgs.follows for hermes-agent.cachix.org to work
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs-2605";
