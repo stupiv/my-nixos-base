@@ -19,9 +19,11 @@ in {
           default = true;
         };
         sliceName = mkOption {
+          type = types.singleLineStr;
           default = name;
         };
         sliceUnit = mkOption {
+          type = types.singleLineStr;
           default = "${cfg.sliceName}.slice";
           readOnly = true;
         };
@@ -53,8 +55,7 @@ in {
                 // {
                   name = mkOption {
                     type = types.singleLineStr;
-                    default = "sleep-on-idle-proxy@${cfg.sliceName}-${endPointArgs.name}";
-                    readOnly = true;
+                    default = "sleep-on-idle-proxy-${cfg.sliceName}-${endPointArgs.name}";
                   };
                 };
             };

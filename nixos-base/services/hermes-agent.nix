@@ -1,12 +1,13 @@
 {
   config,
   lib,
+  pkgs,
   inputs,
   ...
 }:
 with lib; let
   outerCfg = config;
-  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.hermes-agent;
+  enabled = filterAttrs (name: cfg: cfg.enable) outerCfg.myOpt.hermes-agent;
 in {
   options.myOpt.hermes-agent = mkOption {
     default = {};
@@ -32,12 +33,12 @@ in {
           readOnly = true;
         };
         host = mkOption {
-          type = types.anything;
+          type = types.singleLineStr;
           default = cfg.hermes-agent-cfg.backend.host;
           readOnly = true;
         };
         port = mkOption {
-          type = types.anything;
+          type = types.port;
           default = cfg.hermes-agent-cfg.backend.port;
           readOnly = true;
         };
@@ -58,54 +59,73 @@ in {
         };
         sops.dotenv = {
           key = mkOption {
-            type = types.anything;
+            type = types.singleLineStr;
           };
           sopsFile = mkOption {
-            type = types.anything;
+            type = types.path;
           };
           path = mkOption {
-            type = types.strMatching "^${cfg.runDir}/.*[^/]$";
-            default = "${cfg.runDir}/.env";
+            type = types.strMatching "^/run/.*[^/]$";
+            default = outerCfg.sops.secrets.${cfg.sops.dotenv.key}.path;
+            readOnly = true;
           };
-        };
-        runDir = mkOption {
-          type = types.strMatching "^/run/[^/]+/.*[^/]$";
-          default = "/run/${name}/camofox";
         };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
-    sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
+    sops.useTmpfs = true;
+    sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sops.dotenv.key} = {
-          inherit (cfg.sops.dotenv) sopsFile path;
+          inherit (cfg.sops.dotenv) sopsFile;
+          restartUnits = ["container@${name}.service"];
         };
       })
+      enabled);
+
+    systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
+        "d '${cfg.stateDir}' 0711 ${toString cfg.uid} ${toString cfg.gid} - -"
+      ])
       enabled);
 
     containers = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.container.name} = {
           extraFlags = [
-            "--bind=${cfg.stateDir}:${cfg.hermes-agent-cfg.stateDir}:idmap"
-            "--bind=${cfg.runDir}:${cfg.runDir}:rootidmap"
+            "--bind=${cfg.stateDir}:${cfg.stateDir}:idmap"
+            "--bind-ro=${cfg.sops.dotenv.path}:${cfg.sops.dotenv.path}:rootidmap"
           ];
-          config = {...}: {
+          config = {...}: let
+            camoBin = inputs.camoufox-nix.packages.${pkgs.stdenv.hostPlatform.system}.camoufox-bin;
+          in {
             imports = [
               inputs.hermes-agent.nixosModules.default
             ];
-            users.groups.${cfg.hermes-agent-cfg.group}.gid = cfg.gid;
+
+            programs.nix-ld.enable = false;
+            environment.variables = {
+              CAMOUFOX_EXECUTABLE = getExe camoBin;
+              CAMOUFOX_EXECUTABLE_PATH = getExe camoBin;
+            };
+            environment.systemPackages = with pkgs; [
+              (pkgs-2611.python3.withPackages (_: [
+                camoBin.python-camoufox
+              ]))
+            ];
+
             users.users.${cfg.hermes-agent-cfg.user}.uid = cfg.uid;
+            users.groups.${cfg.hermes-agent-cfg.group}.gid = cfg.gid;
             services.hermes-agent = mkMerge [
               cfg.modules.services.hermes-agent
               {
                 enable = true;
+                inherit (cfg) stateDir;
                 package = mkDefault cfg.modules.services.hermes-agent.package;
                 environmentFiles = [cfg.sops.dotenv.path];
                 backend = {
                   inherit (cfg.modules.services.hermes-agent.backend) port;
-                  mode = mkDefault "serve";
                   host = mkDefault "::1";
+                  mode = mkDefault "serve";
                 };
               }
             ];
@@ -121,7 +141,7 @@ in {
           ];
         };
       })
-      (filterAttrs (_: cfg: cfg.netns-id != null) enabled));
+      (filterAttrs (name: cfg: cfg.netns-id != null) enabled));
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
@@ -130,6 +150,6 @@ in {
           ];
         };
       })
-      (filterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
+      (filterAttrs (name: cfg: cfg.sleep-on-idle-id != null) enabled));
   };
 }

@@ -19,7 +19,7 @@ in {
       type = types.anything;
     };
     homeDirectory = mkOption {
-      type = types.singleLineStr;
+      type = types.strMatching "^/home/[^/]+[^/]$";
       default = "/home/${cfg.username}";
       readOnly = true;
     };

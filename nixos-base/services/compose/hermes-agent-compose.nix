@@ -106,21 +106,7 @@ in {
           autoStart = false;
           privateUsers = "pick";
           privateNetwork = false;
-          config = {...}: let
-            camoBin =
-              inputs.camoufox-nix.packages.${pkgs.stdenv.hostPlatform.system}.camoufox-bin;
-          in {
-            nixpkgs.pkgs = pkgs;
-
-            programs.nix-ld.enable = false;
-            environment.variables.CAMOUFOX_EXECUTABLE = getExe camoBin;
-            environment.variables.CAMOUFOX_EXECUTABLE_PATH = getExe camoBin;
-            environment.systemPackages = [
-              (pkgs.python3.withPackages (_: [
-                camoBin.python-camoufox
-              ]))
-            ];
-          };
+          config.nixpkgs.pkgs = pkgs;
         };
       })
       enabled);

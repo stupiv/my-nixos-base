@@ -64,7 +64,7 @@ in {
             readOnly = true;
           };
           unix-socket = mkOption {
-            type = types.strMatching "^\/run\/.+\/.+$";
+            type = types.strMatching "^/run/.+/.+$";
             default = "/run/proxy-compose/${name}/${name}.sock";
           };
         };
@@ -91,7 +91,7 @@ in {
           default = name;
         };
         default-caddy-origin-unix-socket = mkOption {
-          type = types.strMatching "^unix\/\/run\/.+[^\/]$";
+          type = types.strMatching "^unix//run/.+[^/]$";
           default = to-caddy-ip-socket sleep-on-idle-cfg.endpoints.default.proxy.ip-socket;
           readOnly = true;
         };

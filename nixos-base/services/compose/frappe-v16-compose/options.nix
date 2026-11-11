@@ -50,15 +50,15 @@ in {
             default = false;
           };
           stateDir = mkOption {
-            type = types.strMatching "^\/var\/lib\/.+[^\/]$";
+            type = types.strMatching "^/var/lib/.+[^/]$";
             example = "/var/lib/${name}/frappe";
           };
           sitesPath = mkOption {
-            type = types.strMatching "^\/.+[^\/]$";
+            type = types.strMatching "^/.+[^/]$";
             example = "/sites";
           };
           logsPath = mkOption {
-            type = types.strMatching "^\/.+[^\/]$";
+            type = types.strMatching "^/.+[^/]$";
             example = "/logs";
           };
           sitesDir = mkOption {

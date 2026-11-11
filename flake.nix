@@ -3,8 +3,9 @@
     nixpkgs.follows = "nixpkgs-2605";
     nixpkgs-2605.url = "github:nixos/nixpkgs/7dcdd87373d72e7a2173e4db02e20d3d7f495cfd"; # See https://channels.nixos.org/nixos-26.05/git-revision
     nixpkgs-2611.url = "github:nixos/nixpkgs/f4a03c008967841f2a0b3cb7c436fc6fc31671f6"; # See https://channels.nixos.org/nixos-unstable/git-revision
+    # nixpkgs-2611.follows = "hermes-agent/nixpkgs";
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent/v0.22.7"; # See https://github.com/NousResearch/hermes-agent/tags
+      url = "github:NousResearch/hermes-agent/v0.23.1"; # See https://github.com/NousResearch/hermes-agent/tags
       # inputs.nixpkgs.follows = "nixpkgs"; # No inputs.nixpkgs.follows for hermes-agent.cachix.org to work
       # inputs.flake-parts.follows = "flake-parts";
     };
