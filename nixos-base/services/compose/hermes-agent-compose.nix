@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 with lib; let
@@ -23,9 +24,9 @@ in {
           hermes-agent = mkOption {
             type = types.anything;
           };
-          camofox = mkOption {
-            type = types.anything;
-          };
+          # camofox = mkOption {
+          #   type = types.anything;
+          # };
         };
         container.name = mkOption {
           type = types.singleLineStr;
@@ -75,40 +76,51 @@ in {
             container = {
               inherit (cfg.container) name;
             };
-            modules.services.hermes-agent.settings = {
-              browser.cloud_provider = "camofox";
-            };
             sops.dotenv = {inherit (cfg) sopsFile;};
           }
         ];
       })
       enabled);
 
-    myOpt.camofox = mkMerge (mapAttrsToList (name: cfg: {
-        ${name} = mkMerge [
-          cfg.modules.camofox
-          {
-            enable = true;
-            inherit (cfg) sleep-on-idle-id netns-id;
-            oci-container.name = "camofox-${name}";
-            modules.set-env-vars = {
-              systemd-services = [];
-              oci-containers = [];
-              nixos-containers = [cfg.container.name];
-            };
-            sops.dotenv = {inherit (cfg) sopsFile;};
-          }
-        ];
-      })
-      enabled);
+    #     myOpt.camofox = mkMerge (mapAttrsToList (name: cfg: {
+    #         ${name} = mkMerge [
+    #           cfg.modules.camofox
+    #           {
+    #             enable = true;
+    #             inherit (cfg) sleep-on-idle-id netns-id;
+    #             oci-container.name = "camofox-${name}";
+    #             modules.set-env-vars = {
+    #               systemd-services = [];
+    #               oci-containers = [];
+    #               nixos-containers = [cfg.container.name];
+    #             };
+    #             sops.dotenv = {inherit (cfg) sopsFile;};
+    #           }
+    #         ];
+    #       })
+    #       enabled);
 
     containers = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.container.name} = {
           ephemeral = true;
           autoStart = false;
-          config.nixpkgs.pkgs = pkgs;
           privateUsers = "pick";
           privateNetwork = false;
+          config = {...}: let
+            camoBin =
+              inputs.camoufox-nix.packages.${pkgs.stdenv.hostPlatform.system}.camoufox-bin;
+          in {
+            nixpkgs.pkgs = pkgs;
+
+            programs.nix-ld.enable = false;
+            environment.variables.CAMOUFOX_EXECUTABLE = getExe camoBin;
+            environment.variables.CAMOUFOX_EXECUTABLE_PATH = getExe camoBin;
+            environment.systemPackages = [
+              (pkgs.python3.withPackages (_: [
+                camoBin.python-camoufox
+              ]))
+            ];
+          };
         };
       })
       enabled);

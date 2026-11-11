@@ -2,9 +2,12 @@
   inputs = {
     nixpkgs.follows = "nixpkgs-2605";
     nixpkgs-2605.url = "github:nixos/nixpkgs/7dcdd87373d72e7a2173e4db02e20d3d7f495cfd"; # See https://channels.nixos.org/nixos-26.05/git-revision
-
-    nixpkgs-2611.url = "github:nixos/nixpkgs/3ec636362e1816bc2f0888fa0fa2c69f1bc9e504"; # See https://channels.nixos.org/nixos-unstable/git-revision
-    hermes-agent.url = "github:NousResearch/hermes-agent/v0.23.1"; # See https://github.com/NousResearch/hermes-agent/tags # No inputs.nixpkgs.follows for hermes-agent.cachix.org to work
+    nixpkgs-2611.url = "github:nixos/nixpkgs/f4a03c008967841f2a0b3cb7c436fc6fc31671f6"; # See https://channels.nixos.org/nixos-unstable/git-revision
+    hermes-agent = {
+      url = "github:NousResearch/hermes-agent/v0.22.7"; # See https://github.com/NousResearch/hermes-agent/tags
+      # inputs.nixpkgs.follows = "nixpkgs"; # No inputs.nixpkgs.follows for hermes-agent.cachix.org to work
+      # inputs.flake-parts.follows = "flake-parts";
+    };
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs-2605";
@@ -41,6 +44,11 @@
     oisd = {
       url = "github:sjhgvr/oisd";
       flake = false;
+    };
+    camoufox-nix = {
+      url = "github:maximoffua/camoufox-nix";
+      inputs.nixpkgs.follows = "nixpkgs-2611";
+      inputs.flake-parts.follows = "flake-parts";
     };
   };
   outputs = inputs: (inputs.flake-parts.lib.mkFlake {inherit inputs;} {

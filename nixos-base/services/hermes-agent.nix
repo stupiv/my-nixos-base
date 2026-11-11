@@ -90,37 +90,22 @@ in {
             "--bind=${cfg.stateDir}:${cfg.hermes-agent-cfg.stateDir}:idmap"
             "--bind=${cfg.runDir}:${cfg.runDir}:rootidmap"
           ];
-          config = {config, ...}: let
-            innerCfg = config;
-          in {
+          config = {...}: {
             imports = [
               inputs.hermes-agent.nixosModules.default
             ];
             users.groups.${cfg.hermes-agent-cfg.group}.gid = cfg.gid;
             users.users.${cfg.hermes-agent-cfg.user}.uid = cfg.uid;
-            programs.nix-ld.enable = false;
             services.hermes-agent = mkMerge [
               cfg.modules.services.hermes-agent
               {
                 enable = true;
+                package = mkDefault cfg.modules.services.hermes-agent.package;
                 environmentFiles = [cfg.sops.dotenv.path];
                 backend = {
                   inherit (cfg.modules.services.hermes-agent.backend) port;
                   mode = mkDefault "serve";
                   host = mkDefault "::1";
-                };
-                settings = {
-                  display.busy_input_mode = mkDefault "steer";
-                  model = {
-                    default = mkDefault "";
-                    provider = mkDefault "custom";
-                    api_mode = mkDefault "";
-                  };
-                  agent = {
-                    reasoning_effort = mkDefault "none";
-                    service_tier = mkDefault "";
-                  };
-                  moa.presets.default.enabled = mkDefault false;
                 };
               }
             ];

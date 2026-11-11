@@ -19,18 +19,6 @@ in {
       }
       (concatMapAttrs (name1: cfg1: let
         inherit (cfg1) sliceName freezeUnit health-check exit-idle-time TimeoutStartSec;
-        ExecStartPre = getExe (writeShellScriptBin "${sliceName}-health-check" ''
-          until ${
-            if (hasPrefix "/" health-check.ip-socket)
-            then
-              (
-                if (hasInfix "phpfpm" health-check.ip-socket)
-                then "${cgi-fcgi} -bind -connect ${health-check.ip-socket}"
-                else "${curl} -sf --unix-socket ${health-check.ip-socket} http://localhost${health-check.path}"
-              )
-            else "${curl} -sf ${health-check.ip-socket}${health-check.path}"
-          }; do ${sleep} ${health-check.sleep}; done
-        '');
       in
         assert (health-check.ip-socket != null);
           (mapAttrs' (name2: cfg2: let
@@ -41,7 +29,19 @@ in {
             requires = [socketUnit freezeUnit];
             after = [socketUnit freezeUnit];
             serviceConfig = {
-              inherit TimeoutStartSec ExecStartPre;
+              inherit TimeoutStartSec;
+              ExecStartPre = getExe (writeShellScriptBin "${sliceName}-health-check" ''
+                until ${
+                  if (hasPrefix "/" health-check.ip-socket)
+                  then
+                    (
+                      if (hasInfix "phpfpm" health-check.ip-socket)
+                      then "${cgi-fcgi} -bind -connect ${health-check.ip-socket}"
+                      else "${curl} -sf --unix-socket ${health-check.ip-socket} http://localhost${health-check.path}"
+                    )
+                  else "${curl} -sf ${health-check.ip-socket}${health-check.path}"
+                }; do ${sleep} ${health-check.sleep}; done
+              '');
               ExecStart = "${systemd-socket-proxyd} --exit-idle-time=${toString exit-idle-time} ${origin.ip-socket}";
             };
           })))
