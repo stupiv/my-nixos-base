@@ -6,9 +6,9 @@
 }:
 with lib; let
   outerCfg = config;
-  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.camofox;
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.camofox-browser-oci;
 in {
-  options.myOpt.camofox = mkOption {
+  options.myOpt.camofox-browser-oci = mkOption {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;
@@ -42,7 +42,10 @@ in {
               };
             });
           };
-          set-env-vars = mkOption {
+          # set-env-vars = mkOption {
+          #   type = types.anything;
+          # };
+          systemd.services = mkOption {
             type = types.anything;
           };
         };
@@ -66,6 +69,16 @@ in {
             type = types.anything;
           };
         };
+        # uboDir = mkOption {
+        #   type = types.singleLineStr;
+        # };
+        CAMOFOX_URL = mkOption {
+          type = types.singleLineStr;
+          default = let
+            inherit (pkgs.myLib) bracketIpv6;
+            inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
+          in "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
+        };
       };
     }));
   };
@@ -74,9 +87,15 @@ in {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
         ${cfg.sops.dotenv.key} = {
           inherit (cfg.sops.dotenv) sopsFile;
+          # restartUnits = [];
         };
       })
       enabled);
+
+    # systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
+    #     "d ${cfg.uboDir} 0755 0 0 - -"
+    #   ])
+    #   enabled);
 
     virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (_: cfg: {
         ${cfg.oci-container.name} = mkMerge [
@@ -84,9 +103,11 @@ in {
           {
             inherit (cfg.modules.virtualisation.oci-containers.containers) image;
             autoStart = false;
-            environmentFiles = [
-              outerCfg.sops.secrets.${cfg.sops.dotenv.key}.path
-            ];
+            environmentFiles = [outerCfg.sops.secrets.${cfg.sops.dotenv.key}.path];
+            # volumes = ["${cfg.uboDir}:/root/.cache/camoufox/addons/UBO"];
+            environment = {
+              CAMOFOX_DISABLE_DEFAULT_ADDONS = "1";
+            };
             extraOptions =
               [
                 "--shm-size=2g"
@@ -101,20 +122,30 @@ in {
       })
       enabled);
 
-    myOpt.set-env-vars = mkMerge (mapAttrsToList (name: cfg: let
-        inherit (pkgs.myLib) bracketIpv6;
-        inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
-      in {
-        "camofox-${name}" = mkMerge [
-          cfg.modules.set-env-vars
+    systemd.services = mkMerge (mapAttrsToList (_: cfg: {
+        ${outerCfg.virtualisation.oci-containers.containers.${cfg.oci-container.name}.serviceName} = mkMerge [
+          cfg.modules.systemd.services
           {
-            environment = {
-              CAMOFOX_URL = "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
-            };
+            inherit (cfg.modules.systemd.services) before after;
           }
         ];
       })
       enabled);
+
+    # myOpt.set-env-vars = mkMerge (mapAttrsToList (name: cfg: let
+    #     inherit (pkgs.myLib) bracketIpv6;
+    #     inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
+    #   in {
+    #     "camofox-browser-oci-${name}" = mkMerge [
+    #       cfg.modules.set-env-vars
+    #       {
+    #         environment = {
+    #           CAMOFOX_URL = "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
+    #         };
+    #       }
+    #     ];
+    #   })
+    #   enabled);
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.netns-id}.set-network-namespace = {

@@ -24,7 +24,10 @@ in {
           hermes-agent = mkOption {
             type = types.anything;
           };
-          # camofox = mkOption {
+          containers = mkOption {
+            type = types.anything;
+          };
+          # camofox-browser-oci = mkOption {
           #   type = types.anything;
           # };
         };
@@ -48,6 +51,13 @@ in {
           type = types.anything;
           default = name;
         };
+        camofox-browser-oci-id = mkOption {
+          type = types.anything;
+          default = name;
+        };
+        # camofox-plugin = mkOption {
+        #   type = types.package;
+        # };
       };
     }));
   };
@@ -77,37 +87,58 @@ in {
               inherit (cfg.container) name;
             };
             sops.dotenv = {inherit (cfg) sopsFile;};
+            modules.services.hermes-agent = {
+              # extraPlugins = [cfg.camofox-plugin];
+              # settings = {
+              #   browser.cloud_provider = "camofox";
+              #   plugins.enabled = [ "camofox" ];
+              # };
+              # environment = {
+              #   inherit (outerCfg.myOpt.camofox-browser-oci.${cfg.camofox-browser-oci-id}) CAMOFOX_URL;
+              # };
+            };
           }
         ];
       })
       enabled);
 
-    #     myOpt.camofox = mkMerge (mapAttrsToList (name: cfg: {
-    #         ${name} = mkMerge [
-    #           cfg.modules.camofox
-    #           {
-    #             enable = true;
-    #             inherit (cfg) sleep-on-idle-id netns-id;
-    #             oci-container.name = "camofox-${name}";
-    #             modules.set-env-vars = {
-    #               systemd-services = [];
-    #               oci-containers = [];
-    #               nixos-containers = [cfg.container.name];
-    #             };
-    #             sops.dotenv = {inherit (cfg) sopsFile;};
-    #           }
-    #         ];
-    #       })
-    #       enabled);
+    # myOpt.camofox-browser-oci = mkMerge (mapAttrsToList (name: cfg: {
+    #     ${cfg.camofox-browser-oci-id} = mkMerge [
+    #       cfg.modules.camofox-browser-oci
+    #       {
+    #         enable = true;
+    #         inherit (cfg) sleep-on-idle-id netns-id;
+    #         oci-container.name = "camofox-browser-oci-${name}";
+    #         modules = {
+    #           # set-env-vars = {
+    #           #   systemd-services = [];
+    #           #   oci-containers = [];
+    #           #   nixos-containers = [cfg.container.name];
+    #           # };
+    #           systemd.services = {
+    #             before = [
+    #               "container@${cfg.container.name}.service"
+    #             ];
+    #             after = [];
+    #           };
+    #         };
+    #         sops.dotenv = {inherit (cfg) sopsFile;};
+    #       }
+    #     ];
+    #   })
+    #   enabled);
 
     containers = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.container.name} = {
-          ephemeral = true;
-          autoStart = false;
-          privateUsers = "pick";
-          privateNetwork = false;
-          config.nixpkgs.pkgs = pkgs;
-        };
+        ${cfg.container.name} = mkMerge [
+          cfg.modules.containers
+          {
+            ephemeral = true;
+            autoStart = false;
+            privateUsers = "pick";
+            privateNetwork = false;
+            config.nixpkgs.pkgs = pkgs;
+          }
+        ];
       })
       enabled);
   };

@@ -95,23 +95,12 @@ in {
             "--bind=${cfg.stateDir}:${cfg.stateDir}:idmap"
             "--bind-ro=${cfg.sops.dotenv.path}:${cfg.sops.dotenv.path}:rootidmap"
           ];
-          config = {...}: let
-            camoBin = inputs.camoufox-nix.packages.${pkgs.stdenv.hostPlatform.system}.camoufox-bin;
-          in {
+          config = {...}: {
             imports = [
               inputs.hermes-agent.nixosModules.default
             ];
 
             programs.nix-ld.enable = false;
-            environment.variables = {
-              CAMOUFOX_EXECUTABLE = getExe camoBin;
-              CAMOUFOX_EXECUTABLE_PATH = getExe camoBin;
-            };
-            environment.systemPackages = with pkgs; [
-              (pkgs-2611.python3.withPackages (_: [
-                camoBin.python-camoufox
-              ]))
-            ];
 
             users.users.${cfg.hermes-agent-cfg.user}.uid = cfg.uid;
             users.groups.${cfg.hermes-agent-cfg.group}.gid = cfg.gid;
