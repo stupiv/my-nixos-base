@@ -63,7 +63,7 @@ in {
         };
         serviceName = mkOption {
           type = types.singleLineStr;
-          default = "squid@${name}";
+          default = "squid-${name}";
           readOnly = true;
         };
         package = mkOption {
@@ -146,34 +146,28 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    environment.etc = mapAttrs' (name: _:
-      nameValuePair "squid/${name}.conf" {
-        source = configFiles.${name};
-      })
-    enabled;
-
     systemd.services = mkMerge ([
-        {
-          "squid@" = {
+        (mapAttrs' (name: cfg:
+          nameValuePair cfg.serviceName {
             after = ["network.target" "nss-lookup.target"];
-            unitConfig.ConditionPathExists = "/etc/squid/%i.conf";
-            environment.TMPDIR = "/run/squid-%i";
+            restartTriggers = [configFiles.${name} cfg.package];
+            environment.TMPDIR = "/run/squid-${name}";
             serviceConfig = {
               Type = "notify";
               NotifyAccess = "main";
               DynamicUser = true;
-              User = "squid-%i";
-              Group = "squid-%i";
-              RuntimeDirectory = "squid-%i";
+              User = "squid-${name}";
+              Group = "squid-${name}";
+              RuntimeDirectory = "squid-${name}";
               RuntimeDirectoryMode = "0700";
-              CacheDirectory = "squid-%i";
+              CacheDirectory = "squid-${name}";
               CacheDirectoryMode = "0700";
-              LogsDirectory = "squid-%i";
+              LogsDirectory = "squid-${name}";
               LogsDirectoryMode = "0700";
-              WorkingDirectory = "/var/cache/squid-%i";
-              NoExecPaths = ["/var/cache/squid-%i" "/var/log/squid-%i" "/run/squid-%i"];
-              ExecStartPre = "\${SQUID_BINARY} --foreground -z -f \${SQUID_CONFIG}";
-              ExecStart = "\${SQUID_BINARY} --foreground -YCs -f \${SQUID_CONFIG}";
+              WorkingDirectory = "/var/cache/squid-${name}";
+              NoExecPaths = ["/var/cache/squid-${name}" "/var/log/squid-${name}" "/run/squid-${name}"];
+              ExecStartPre = "${cfg.package}/bin/squid --foreground -z -f ${configFiles.${name}}";
+              ExecStart = "${cfg.package}/bin/squid --foreground -YCs -f ${configFiles.${name}}";
               KillMode = "mixed";
               Restart = "on-failure";
               NoNewPrivileges = true;
@@ -204,16 +198,6 @@ in {
               SystemCallFilter = ["@system-service"];
               SystemCallErrorNumber = "EPERM";
               UMask = "0077";
-            };
-          };
-        }
-        (mapAttrs' (name: cfg:
-          nameValuePair cfg.serviceName {
-            overrideStrategy = "asDropin";
-            restartTriggers = [configFiles.${name} cfg.package];
-            environment = {
-              SQUID_BINARY = "${cfg.package}/bin/squid";
-              SQUID_CONFIG = "/etc/squid/${name}.conf";
             };
           })
         enabled)
