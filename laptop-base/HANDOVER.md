@@ -1,67 +1,46 @@
-- This is the handover for `laptop-base/`.
-  - Snapshot
-    - The source snapshot is dated 2026-11-07 on branch `arena/a7026f5a-my-nixos-base` at commit `66ded62`, and it was not build-tested because the authoring sandbox had no `nix`.
-    - This file was reshaped into nested bullets on 2026-11-07 (branch `arena/056af839-my-nixos-base`, commit `c103788`) without re-verifying its claims.
-
-  - What this directory is for
-    - It is the **workstation flavour** of the flake, exported as `flake.nixosModules.laptop-base`.
-    - It is `nixos-base` plus a desktop environment, laptop hardware toggles and a home-manager profile.
-    - Everything here is a thin, mostly `mkDefault`-ed overlay on top of the shared layer, so the difference between the laptop and the VPS is *only* this directory plus `install/`.
-    - `laptop-base/default.nix` imports `../nixos-base`, `./common`, `./appimage.nix`, `./bluetooth.nix`, `./cosmic.nix`, `./de.nix`, `./firewall.nix`, `./home-manager.nix`, `./ipv6.nix`, `./naturalScrolling.nix`, `./nixos_ozone_wl.nix`, `./plasma6.nix`, `./sound.nix`, `./tlp.nix`, `./tmpfs.nix` and `./vi-ime.nix`.
-    - The same list carries the commented `# ./home-manager` marker, because the *directory* is imported via `./home-manager.nix` instead.
-
-  - Files at this level
-    - `de.nix` sets `myOpt.cosmic.enable = true`, so **the desktop choice lives here** in one line that you override to switch DE.
-    - `cosmic.nix` enables the COSMIC DE and greeter when `myOpt.cosmic.enable` is set.
-      - It excludes `cosmic-edit/player/screenshot/term` because their own equivalents are used, and it sets `COSMIC_DATA_CONTROL_ENABLED = 1`.
-    - `plasma6.nix` enables KDE Plasma 6 with SDDM on Wayland when `myOpt.plasma6.enable` is set, defaults to `false`, and has **no assertion preventing both DEs from being enabled**.
-    - `home-manager.nix` wires `inputs.home-manager.nixosModules.default` for `myOpt.admin.username` and imports `./home-manager`.
-    - `appimage.nix` sets `programs.appimage.{enable,binfmt}` and requires `nix-ld`, already on in `nixos-base`, for extracted AppImages to run.
-    - `bluetooth.nix` sets `hardware.bluetooth.enable` and requires the `bluetooth` service plus firmware from `nixos-base/firmware.nix`.
-    - `firewall.nix` sets `services.caddy.openFirewall = false`, because the laptop publishes nothing publicly and uses tunnels or unix sockets only.
-    - `ipv6.nix` sets `myOpt.ipv6.public-address = null` to satisfy the **mandatory** option from `nixos-base/ipv6.nix`, without which the module would not evaluate.
-    - `tmpfs.nix` sets `boot.tmp.useTmpfs = true`, so `/tmp` lives in RAM and large builds or dotnet-style temp files eat RAM.
-    - `tlp.nix` sets `services.tlp.enable = true`, which triggers `nixos-base/tlp.nix` with thresholds of 75/80 % and **force-disables** `power-profiles-daemon`, `thermald` and `powertop`.
-    - `naturalScrolling.nix` sets `services.libinput.touchpad.naturalScrolling` globally, with no per-device granularity.
-    - `sound.nix` enables PipeWire, Pulse and `dconf`, where `dconf` is present specifically so home-manager's `services.easyeffects` can work.
-    - `nixos_ozone_wl.nix` sets `NIXOS_OZONE_WL = 1` to make Electron/Chromium apps use Wayland.
-    - `vi-ime.nix` configures fcitx5 with `fcitx5-bamboo` and a Wayland frontend for Vietnamese input (Telex/VNI), and needs `i18n.inputMethod.enable` which it sets via `mkDefault true`.
-    - `unmaintained/` is not imported and is documented in [`unmaintained/HANDOVER.md`](unmaintained/HANDOVER.md).
-    - The subdirectories are [`common/`](common/HANDOVER.md), [`home-manager/`](home-manager/HANDOVER.md) and [`unmaintained/`](unmaintained/HANDOVER.md).
-
-  - The home-manager wiring (the part that confuses people)
-    - The wiring sets `home-manager.extraSpecialArgs = { inherit inputs; };` and `home-manager.backupFileExtension = "backup";`.
-    - It then configures `home-manager.users.${config.myOpt.admin.username}` with `imports = [ ./home-manager ];` and `home = { inherit (config.myOpt.admin) username homeDirectory; stateVersion = config.system.nixos.release; };`.
-    - Only **one** user is managed and its name comes from `myOpt.admin.username`, so `admin.nix` must be configured before any of this evaluates.
-    - `home.stateVersion` is derived from the **system** release, so it tracks the nixpkgs pin (`26.05`).
-      - That is convenient but means bumping nixpkgs silently bumps the home-manager state version, which is normally a latch you set once.
-    - `backupFileExtension = "backup"` is why you will find `*.backup` files next to managed dotfiles after a switch.
-    - `extraSpecialArgs = { inherit inputs; }` is what lets `home-manager/zen-browser.nix` and `flatpak.nix` import flake inputs such as `inputs.zen-browser-flake…` and `inputs.nix-flatpak…`.
-    - The commented `# ./home-manager` in `default.nix` is *not* a mistake, because importing the directory as a **NixOS** module would be wrong given that it contains home-manager modules, so it is imported from inside `home-manager.users.<user>.imports`.
-
-  - Gotchas
-    - **Two DEs are possible at once.**
-      - `de.nix` hard-sets `myOpt.cosmic.enable = true`, so a host that also sets `myOpt.plasma6.enable = true` gets COSMIC plus Plasma plus both greeters with no assertion to stop it.
-      - Changing the desktop means editing or overriding `de.nix` rather than just flipping a flag.
-    - **`plasma6.nix` and `cosmic.nix` both declare `services.displayManager` bits** (`sddm` vs `cosmic-greeter`), and they are not coordinated so they will conflict at the greeter level.
-    - **`ipv6.nix` is load-bearing, not cosmetic**, because it exists to satisfy a mandatory option of `nixos-base/ipv6.nix` and deleting it breaks evaluation of the whole laptop module.
-    - **No hardware config lives here**, meaning no `hardware-configuration`, no `boot.loader.*` device, no `networking.hostName` and no `system.stateVersion`.
-      - Those come from the consumer via `install/` plus the host config, and `nixos-base/bootloader.nix` uses `device = "nodev"` with removable EFI to pair with `install/disko-config.nix`.
-    - **`tmpfs` plus `zramSwap` plus `swapDevices = []`** together mean this machine has no durable swap and a RAM-backed `/tmp`.
-      - On a 16 GB laptop with 400 % zram, suspend/hibernate behaviour is worth re-checking after any change here.
-    - **`sound.nix` sets `programs.dconf.enable`** only because easyeffects, which is home-manager-side and gated on `myOpt.easyeffects.enable` with default false, needs it.
-      - If you enable easyeffects, remember the dconf requirement is already satisfied.
-    - **`vi-ime.nix` uses `mkDefault true` for `i18n.inputMethod.enable`**, so a host can turn the IME off without a conflict, but `type = "fcitx5"` is a plain value and switching to ibus requires `mkForce`.
-    - `nixos_ozone_wl.nix` and `appimage.nix` are the two "modern desktop plumbing" files, and both are safe on a VPS but pointless there, which is why they are not in `nixos-base`.
-
-  - How to change the desktop
-    - Set `myOpt.plasma6.enable = true` and `myOpt.cosmic.enable = false` to override `de.nix`, or edit `de.nix` directly.
-    - Make sure only one `services.displayManager` provider is enabled.
-    - Check that `NIXOS_OZONE_WL` still applies, and note that `vi-ime` uses the Wayland frontend so it requires a Wayland session.
-    - Prefer adding packages to [`home-manager/packages.nix`](home-manager/packages.nix) over `environment.systemPackages`, because the laptop keeps user tooling in home-manager.
-
-  - See also
-    - [`../HANDOVER.md`](../HANDOVER.md) covers mandatory values and global issues, including **G4** where `pkgs.pkgs-2611` is undefined and `home-manager/activitywatch.nix` is imported unconditionally.
-    - [`../nixos-base/HANDOVER.md`](../nixos-base/HANDOVER.md) covers everything shared, including the `tlp.nix` assertions.
-    - [`home-manager/HANDOVER.md`](home-manager/HANDOVER.md) covers the user profile.
-    - [`../install/HANDOVER.md`](../install/HANDOVER.md) covers disko, facter and the sops key.
+1. `laptop-base/` exports the workstation flavour as `flake.nixosModules.laptop-base`.
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../HANDOVER.md).
+    2. `default.nix` combines the shared system with desktop and hardware modules.
+        1. `../nixos-base` supplies the shared system and service layer.
+        2. [`common/`](common/HANDOVER.md) supplies shared overlays and cache settings.
+        3. [`home-manager/`](home-manager/HANDOVER.md) supplies the user profile through `home-manager.nix`.
+        4. [`unmaintained/`](unmaintained/HANDOVER.md) remains outside the import graph.
+        5. Keep the commented `# ./home-manager` marker because the directory contains home-manager modules rather than NixOS modules.
+    3. Desktop selection requires coordinated toggles.
+        1. `de.nix` sets `myOpt.cosmic.enable = true`.
+        2. `cosmic.nix` enables COSMIC and its greeter while excluding its editor, player, screenshot tool, and terminal.
+        3. COSMIC sets `COSMIC_DATA_CONTROL_ENABLED = 1`.
+        4. `plasma6.nix` optionally enables Plasma 6 and Wayland SDDM with a default-disabled toggle.
+        5. No assertion prevents both desktops and conflicting greeters from being enabled.
+        6. Switching to Plasma requires disabling COSMIC and ensuring exactly one display-manager provider.
+    4. Hardware and desktop plumbing live in small modules.
+        1. `appimage.nix` enables AppImage execution and binfmt using the shared `nix-ld` support.
+        2. `bluetooth.nix` enables Bluetooth with firmware supplied by the shared layer.
+        3. `firewall.nix` disables Caddy firewall opening for tunnel-based or local publication.
+        4. `ipv6.nix` satisfies the shared required option with `myOpt.ipv6.public-address = null`.
+        5. `naturalScrolling.nix` enables natural scrolling for all touchpads.
+        6. `nixos_ozone_wl.nix` sets `NIXOS_OZONE_WL = 1` for Chromium and Electron Wayland support.
+        7. `sound.nix` enables PipeWire, Pulse compatibility, and dconf for EasyEffects.
+        8. `tlp.nix` enables shared TLP policy with 75/80 percent charging thresholds.
+        9. Enabled TLP force-disables `power-profiles-daemon`, `thermald`, and `powertop`.
+        10. `tmpfs.nix` places `/tmp` in RAM.
+        11. `vi-ime.nix` enables fcitx5-bamboo with a Wayland frontend for Vietnamese Telex/VNI input.
+        12. Disabling the IME overrides `mkDefault true`, while replacing its plain `fcitx5` type may require `mkForce`.
+    5. Home-manager manages one admin user.
+        1. `home-manager.nix` imports `inputs.home-manager.nixosModules.default` and the profile directory.
+        2. The username and home directory come from `myOpt.admin`.
+        3. `extraSpecialArgs = { inherit inputs; }` exposes flake inputs to profile modules.
+        4. `backupFileExtension = "backup"` preserves replaced dotfiles as `*.backup`.
+        5. `home.stateVersion = config.system.nixos.release` advances with the system pin rather than remaining fixed.
+        6. Configure the admin options before evaluating the profile.
+    6. Hosts must still supply machine configuration.
+        1. Provide hardware configuration, hostname, platform, and `system.stateVersion` downstream.
+        2. Import the [installation layer](../install/HANDOVER.md) when using disko and facter.
+        3. Keep the mandatory IPv6 override even on laptops without static IPv6.
+        4. Account for RAM-backed `/tmp`, 400 percent zram, and forced empty disk swap when testing memory pressure and hibernation.
+        5. Resolve **G4** because the unconditionally imported ActivityWatch module requires undefined `pkgs.pkgs-2611`.
+    7. Extend the user and desktop layers in their intended contexts.
+        1. Prefer [`home-manager/packages.nix`](home-manager/packages.nix) for GUI packages.
+        2. Retain Wayland compatibility for Ozone and the Vietnamese input frontend.
+        3. The [shared-system handover](../nixos-base/HANDOVER.md) covers TLP assertions and common services.
+        4. The [root handover](../HANDOVER.md) covers mandatory values and global issues.

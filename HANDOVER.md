@@ -1,131 +1,92 @@
-- This is the handover for the repository root, `my-nixos-base`.
-  - Snapshot and authoring constraints
-    - The source snapshot is dated 2026-11-07 on branch `arena/a7026f5a-my-nixos-base` at base commit `66ded62` ("2026-11-07T11:23:12 +07").
-    - `nix` was **not** installed in the sandbox that wrote these documents, so nothing here was build-tested.
-    - Everything below is derived from reading the source, and items that could not be verified are marked **⚠ verify**.
-    - This file was reshaped into nested bullets on 2026-11-07 (branch `arena/056af839-my-nixos-base`, commit `c103788`) without re-verifying its claims.
-
-  - What this repo is (60-second orientation)
-    - It is a personal, flake-parts-based **NixOS module library**, *not* a runnable system configuration.
-    - `flake.nix` exports exactly two NixOS modules, verbatim `flake.nixosModules.laptop-base = ./laptop-base;` and `flake.nixosModules.vps-base = ./vps-base;`.
-    - A downstream host configuration kept outside this repo imports one of those two modules, supplies the mandatory `myOpt.*` values, and adds the per-machine hardware bits from `install/`.
-    - Every workload (Caddy, Cloudflared, Keycloak, LiteLLM, n8n, Plausible, Frappe, Squid, …) is **opt-in** through option attributes, so importing `nixos-base` alone starts no application services.
-    - Three ideas explain most of the code:
-      - `myOpt.*` is the option namespace, and almost every module declares `options.myOpt.<thing>` and then walks `filterAttrs (_: cfg: cfg.enable) config.myOpt.<thing>` so that declaring an instance is what enables it.
-      - Unix sockets are the default transport, with containers and services listening on `::1` or on a unix socket while Caddy, Cloudflared and `systemd-socket-proxyd` are the only things that face the network, which is what makes `sleep-on-idle`, `netns` and `squid` composable.
-      - Laziness is a feature, because services are `autoStart = false` and are pulled up on demand by `sleep-on-idle` socket activation, which freezes the cgroup slice when idle.
-
-  - Layout
-    - `flake.nix` and `flake.lock` hold the inputs, the pinned nixpkgs revisions and the two module outputs, and are documented in this file.
-    - `nixos-base/` holds the shared server-side configuration for users, SSH, DNS, bootloader and all services, documented in [`nixos-base/HANDOVER.md`](nixos-base/HANDOVER.md).
-    - `laptop-base/` holds the desktop layer of hardware toggles, DE/compositor and home-manager wiring, documented in [`laptop-base/HANDOVER.md`](laptop-base/HANDOVER.md).
-    - `vps-base/` is a six-line module consisting of `../myPkgs` plus `../nixos-base`, documented in [`vps-base/HANDOVER.md`](vps-base/HANDOVER.md).
-    - `install/` holds disko partitioning, hardware config and deliberate `throw` reminders, documented in [`install/HANDOVER.md`](install/HANDOVER.md).
-    - `myLib/` holds helpers exposed as `pkgs.myLib` via an overlay, documented in [`myLib/HANDOVER.md`](myLib/HANDOVER.md).
-    - `myPkgs/` holds pinned OCI image tags exposed as `pkgs.myPkgs` via an overlay, documented in [`myPkgs/HANDOVER.md`](myPkgs/HANDOVER.md).
-    - Composition of `flake.nixosModules.laptop-base`:
-      - The entry point is `laptop-base/default.nix`.
-      - It imports `../nixos-base` for the shared server, terminal and service layer.
-      - It imports `./common` for the nixpkgs overlays and substituters.
-      - It imports `./cosmic.nix`, `./plasma6.nix` and `./de.nix` for the DE choice.
-      - It imports `./home-manager.nix`, which in turn pulls in `./home-manager/*` as the user profile.
-      - It imports `./appimage`, `bluetooth`, `firewall`, `ipv6`, `sound`, `tlp` and the remaining hardware toggles.
-    - Composition of `flake.nixosModules.vps-base`:
-      - The entry point is `vps-base/default.nix`, which imports only `../myPkgs` and `../nixos-base`.
-    - `install/` is **not** imported by either module, so the consumer host adds it.
-    - `nixos-base/default.nix` additionally re-imports `../myLib` and `../myPkgs`, so both scopes exist in either flavour.
-    - Those two directories are therefore imported twice on the laptop path, which is harmless because module imports are idempotent.
-
-  - Inputs and pinning (`flake.nix`)
-    - `nixpkgs` *follows* `nixpkgs-2605` and is the default `pkgs` everywhere.
-    - `nixpkgs-2605` is pinned to rev `7dcdd87` (nixos-26.05), with a comment linking to `channels.nixos.org/nixos-26.05/git-revision`.
-    - `nixpkgs-2611` is pinned to rev `3ec6363` (nixos-unstable) but is declared and **not** wired into `pkgs`, which is issue **G4**.
-    - `home-manager` tracks `release-26.05`, follows `nixpkgs-2605`, and is used by `laptop-base/home-manager.nix`.
-    - `flake-parts` comes from `hercules-ci/flake-parts` and supplies `mkFlake` with `systems = [x86_64-linux aarch64-linux]`.
-    - `sops-nix` comes from `Mic92/sops-nix` and is imported by `nixos-base/sops.nix`.
-    - `nix-index-database` follows `nixpkgs` and powers `comma`.
-    - `disko` comes from `nix-community/disko` and is only used by `install/disko-config.nix`.
-    - `nix-flatpak` is `gmodena/nix-flatpak?ref=latest` and provides the home-manager flatpak module.
-    - `zen-browser-flake` comes from `0xc000022070/zen-browser-flake`, is home-manager only, and has `nixGL` enabled.
-    - `nixos-hardware` comes from `NixOS/nixos-hardware` and is **not referenced by any module**, being intended for `install/nixos-hardware.nix`.
-    - `oisd` comes from `sjhgvr/oisd` with `flake = false` and is `readFile`d by `nixos-base/dnscrypt/filter.nix`.
-    - `hermes-agent` is pinned to `NousResearch/hermes-agent/v0.21.7`, is used by `nixos-base/services/hermes-agent.nix` and `laptop-base/home-manager/unmaintained/hermes-agent.nix`, and carries the comment "No inputs follows for cache to work".
-    - There is no CI, no formatter/treefmt config, no `README`, and `.gitignore` is empty.
-    - Formatting is hand-maintained and consistently looks like `alejandra` output (2-space, one-arg-per-line), so **⚠ verify** which formatter is expected before mass-reformatting.
-
-  - Conventions you must follow
-    - `# ./default.nix` comment lines are deliberate markers rather than dead weight:
-      - Nearly every `imports = [...]` list contains a commented-out self-import such as `./default.nix`, `./defaut.nix` or `./unmaintained`.
-      - The marker keeps directory listing order and makes it obvious when a file was dropped from a list, so do not "clean these up".
-    - Per-instance submodules are the standard service shape:
-      - A service is an attribute set of *instances* declared as `options.myOpt.<svc> = mkOption { default = {}; type = types.attrsOf (types.submodule ({name, ...}: {...})); };`.
-      - The instance name is the key and is usually baked into unit, container and directory names such as `"${name}-backend"`.
-    - Use `mkDefault` for anything a host may override, and `mkForce` only where a value must win, as in `zramSwap` and `sleep-on-idle/set-cgroup-parent.nix`.
-    - sops secret naming is `<instance-name>/<purpose>`, for example `test/litellm-envFile` and `test/frappe_envfile`.
-      - Consumers must have those keys in their sops file, because the modules only declare `sops.secrets.<key>`.
-    - `enable` defaults are polarised:
-      - Top-level features such as `myOpt.cosmic.enable`, `myOpt.zen-browser.enable`, `myOpt.easyeffects.enable` and `myOpt.mesa-opencl.enable` default to **false**.
-      - Per-service instance `enable` defaults to **true**, so that *declaring* an instance turns it on.
-    - `types.anything` is used liberally for pass-through config such as `container`, `modules.services.*`, `authorizedKeys` and `hashedPassword`.
-      - There is almost no type safety on those paths, so a typo only shows up at evaluation time.
-    - Names are load-bearing, because container name, unit name, slice name, socket dir and state dir all derive from the instance name by default.
-      - Renaming an instance therefore renames its state directory.
-
-  - Values a consumer **must** provide
-    - `nixos-base` cannot evaluate standalone, and missing these is the usual first-hour failure.
-    - `myOpt.admin.username` has no default and type `types.anything`, and is used by `admin.nix`, `networkmanager.nix`, `dirs.nix` (default `homeDir`) and `rclone-automount`.
-    - `myOpt.admin.hashedPassword` has no default and feeds `users.users.<name>.hashedPassword`, so generate it with `mkpasswd`.
-    - `myOpt.admin.authorizedKeys` has no default and also decides whether SSH is enabled at all.
-    - `myOpt.ipv6.public-address` has no default, is set to `null` by `laptop-base/ipv6.nix`, and must be set by a VPS unless `dnscrypt.ipv6.disable` is used.
-    - `myOpt.dnscrypt.ipv6.disable` has no default and drives `block_ipv6` plus Cloudflared `edgeIPVersion`.
-    - `system.stateVersion` is commented out in `install/stateVersion.nix` and must be set by the host.
-    - `myOpt.disk.{id,device}` has no default and is required by `install/disko-config.nix`.
-    - Everything else has defaults or is opt-in.
-
-  - Deployment (inferred from `install/`, **⚠ verify**)
-    - The `install/` layer plus its `throw` messages describe the intended flow.
-    - Partition with **disko**, whose `install/disko-config.nix` builds GPT → 1 MiB `EF02` BIOS-boot plus a 500 MiB ESP plus a btrfs root with `@root`/`@nix` subvolumes and `compress=zstd`.
-    - Generate the hardware config with **nixos-facter**, because `install/hardware-configuration.nix` throws unless `./facter.json` exists and its message names `nixos-anywhere --generate-hardware-config nixos-facter ./facter.json`.
-    - Put the age key at `/var/lib/sops-nix/key.txt`, since `install/reminders.nix` throws until you delete it and `nixos-base/sops.nix` sets `sops.age.keyFile` to exactly that path.
-    - Import the matching `nixos-hardware` module in `install/nixos-hardware.nix`, which is currently a bare `throw`.
-    - Run `nixos-rebuild switch --flake .#<host>` or `nixos-anywhere` for remote installs.
-    - No host configurations are defined in this flake, so the downstream config supplies `nixpkgs.hostPlatform`, `networking.hostName` and the `myOpt` payload.
-
-  - Known issues across the repo
-    - These are ordered roughly by how likely they are to bite, and each is repeated in the relevant sub-handover.
-    - **G1 — `netns` option shape vs. external netns consumers (resolved in `camofox.nix`, `fastcrw.nix` and `litellm.nix`).**
-      - `nixos-base/services/netns.nix` exposes `nsPath` and `serviceUnit`, while `camofox.nix`, `fastcrw.nix` and `litellm.nix` previously carried local helpers reading non-existent `entry.path`, `entry.resolvConf` and `entry.unit`.
-      - Those three services now leave `myOpt.netns` and `myOpt.sleep-on-idle` wiring to compose modules via `set-network-namespace` and `set-cgroup-parent`, eliminating the latent `path` evaluation error.
-      - Maintainer intent recorded on 2026-11-07 is that `myOpt.netns` namespaces are deliberately left with no DNS and no Internet reach, so the absent resolver wiring is not itself a connectivity defect.
-    - **G2 — `install/` is orphaned.**
-      - Nothing imports it, and three of its six files are *intentional* `throw`s or placeholders, namely `reminders.nix`, `nixos-hardware.nix` and the commented `stateVersion`.
-      - Do not "fix" the throws globally, because they are the install-time checklist.
-    - **G3 — dormant directories.**
-      - `nixos-base/unmaintained/` (which has no `default.nix` at all), `laptop-base/unmaintained/`, `laptop-base/home-manager/unmaintained/` and `nixos-base/services/compose/unmaintained/` (explicitly commented in `compose/default.nix`) are not in any import graph.
-      - They still get evaluated by tools that scan the tree, so they are not "free" to leave broken.
-    - **G4 — `pkgs.pkgs-2611` / `pkgs.pkgs-2605` are never defined.**
-      - `laptop-base/home-manager/activitywatch.nix` does `inherit (pkgs) pkgs-2611` and `easyeffects.nix` does `inherit (pkgs) pkgs-2605`, but the only overlay that could define them, `laptop-base/common/nixpkgs-overlays.nix`, is an empty stub with the line commented out.
-      - Because `activitywatch.nix` is imported unconditionally by `home-manager/default.nix`, the laptop profile will fail to evaluate unless the consumer defines those attributes.
-      - The commented overlay is the intended home for them.
-    - **G5 — `openssh.ports = [cfg.port]`** in `nixos-base/openssh.nix` yields `[ null ]` when SSH is enabled without a port, because `port` defaults to `null`, so set `myOpt.openssh.port` whenever `enable` is true.
-    - **G6 — `nixos-base/services/compose/n8n-compose.nix` reads undeclared options** (`cfg.n8n.serviceName`, `cfg.proxy-compose.hostname`), so treat it as WIP and do not enable it blind.
-    - **G7 — TLP settings** in `nixos-base/tlp.nix` exclude phones from USB autosuspend and set the default power profile to `SAV` using setting names for both older and newer TLP versions.
-      - The same file also pins charge thresholds of 75/80 % for both batteries.
-    - **G8 — hard-coded locale/timezone** in `nixos-base/time.nix` (`Asia/Ho_Chi_Minh`, `LC_TIME = en_DK.UTF-8`) is intentional for a 24-hour clock in English, but a per-host override needs `mkForce`/`mkDefault` awareness.
-    - **G9 — `zramSwap.memoryPercent = 400` plus `swapDevices = mkForce []`** is a deliberate "no disk swap" policy, so any host that wants a swapfile must override both.
-
-  - Common tasks → where to go
-    - To add a new always-on service, create `nixos-base/services/<name>.nix` and add it to `nixos-base/services/default.nix`.
-    - To add a containerised app behind Caddy/Cloudflare, model it on `nixos-base/services/compose/plausible-compose.nix` (NixOS container) or `keycloak-compose.nix`.
-    - To change what the terminal looks like, edit `nixos-base/terminal/` for aliases and packages.
-    - To change the desktop, edit `laptop-base/de.nix` (`myOpt.cosmic.enable`) or use `myOpt.plasma6.enable`.
-    - To add a GUI app, edit `laptop-base/home-manager/packages.nix`.
-    - To bump a container image, edit `myPkgs/oci-img.nix`, because image tags are centralised there while the per-service `image` options are `example`-only and must be passed explicitly.
-    - To add a helper used by several modules, create `myLib/<name>.nix` and add it to `myLib/default.nix`.
-
-  - Handover checklist for the next maintainer
-    - `git log` is a single squashed commit, so **there is no useful history here** and the tree is the source of truth.
-    - Read `nixos-base/default.nix` and `laptop-base/default.nix` first, because those two import lists *are* the table of contents.
-    - Reproduce a build on a machine with Nix before changing anything, keeping in mind that `nix flake check` will evaluate both modules but cannot catch the `myOpt.admin.*` gaps that only appear when a host imports them.
-    - Resolve **G4** first, since it is the remaining global issue that turns a fresh laptop evaluation into an evaluation error.
-    - The sandbox that produced these files had **no network access to `cache.nixos.org`**, so no substitution or build was attempted and all statements about runtime behaviour come from reading the units and services rather than running them.
+1. This repository provides reusable NixOS modules rather than a complete host configuration.
+    1. These notes describe an unbuilt source snapshot from 2026-11-07.
+        1. The original snapshot used branch `arena/a7026f5a-my-nixos-base` at commit `66ded62`.
+        2. The bullet-list revision used branch `arena/056af839-my-nixos-base` at commit `c103788` without rechecking claims.
+        3. The authoring sandbox lacked Nix and access to `cache.nixos.org`, so runtime claims remain unverified.
+        4. Items marked **⚠ verify** require further investigation.
+    2. The flake exports the laptop and VPS module flavours.
+        1. `flake.nixosModules.laptop-base` imports the shared system, desktop, hardware, and home-manager layers.
+        2. `flake.nixosModules.vps-base` imports `../myPkgs` and `../nixos-base`.
+        3. Downstream hosts supply mandatory options, hardware configuration, and installation modules.
+        4. Application workloads are opt-in through `myOpt.*` instances.
+        5. Unix sockets, isolated network namespaces, and socket activation connect most workloads.
+        6. Sleep-on-idle freezes idle service slices rather than stopping their containers.
+    3. The directory handovers describe each layer.
+        1. [`nixos-base/`](nixos-base/HANDOVER.md) provides shared identity, SSH, DNS, boot, terminal, and service configuration.
+        2. [`laptop-base/`](laptop-base/HANDOVER.md) adds desktop environments, hardware settings, and home-manager.
+        3. [`vps-base/`](vps-base/HANDOVER.md) provides the minimal server entry point.
+        4. [`install/`](install/HANDOVER.md) provides partitioning, hardware configuration, and deliberate installation reminders.
+        5. [`myLib/`](myLib/HANDOVER.md) exposes helper functions through `pkgs.myLib`.
+        6. [`myPkgs/`](myPkgs/HANDOVER.md) exposes OCI image tags through `pkgs.myPkgs`.
+        7. Neither exported module imports `install/` automatically.
+        8. Repeated imports of `myLib` and `myPkgs` are deduplicated by the module system.
+    4. `flake.nix` and `flake.lock` define the inputs and pins.
+        1. Default `nixpkgs` follows `nixpkgs-2605`, pinned to revision `7dcdd87` for NixOS 26.05.
+        2. `nixpkgs-2611` pins unstable revision `3ec6363` but does not populate a secondary package scope.
+        3. Home-manager follows `nixpkgs-2605` and tracks `release-26.05`.
+        4. `hercules-ci/flake-parts` declares `x86_64-linux` and `aarch64-linux` systems.
+        5. `Mic92/sops-nix` supplies system secret management.
+        6. `nix-index-database` follows `nixpkgs` and supplies `comma`.
+        7. `nix-community/disko` supplies partitioning for `install/disko-config.nix`.
+        8. `gmodena/nix-flatpak?ref=latest` supplies the home-manager Flatpak module.
+        9. `0xc000022070/zen-browser-flake` supplies Zen with nixGL support.
+        10. `NixOS/nixos-hardware` is reserved for the unfinished installation module.
+        11. Non-flake input `sjhgvr/oisd` supplies the pinned DNS blocklist.
+        12. `NousResearch/hermes-agent/v0.21.7` supplies system and parked desktop agent modules.
+        13. Hermes inputs intentionally avoid `follows` to preserve binary-cache compatibility.
+        14. The snapshot has no CI, README, formatter configuration, or populated `.gitignore`.
+        15. **⚠ verify** the expected formatter before replacing the hand-maintained, Alejandra-like formatting.
+    5. Preserve the repository's module conventions.
+        1. Keep commented self-import and dormant-directory markers such as `# ./default.nix`, `# ./defaut.nix`, and `# ./unmaintained`.
+        2. Model services as `attrsOf` instance submodules filtered by `cfg.enable`.
+        3. Top-level feature toggles usually default to `false`, while service-instance toggles usually default to `true`.
+        4. Prefer `mkDefault` for host-overridable values and reserve `mkForce` for enforced policy.
+        5. Name sops secrets `<instance>/<purpose>` and provision their values in the consumer's sops file.
+        6. Treat `types.anything` pass-throughs as weakly checked configuration.
+        7. Treat instance names as persistent identifiers because they determine units, sockets, slices, secrets, and state paths.
+    6. Consumers must supply host-specific values.
+        1. Set `myOpt.admin.username`, `myOpt.admin.hashedPassword`, and `myOpt.admin.authorizedKeys` explicitly.
+        2. Generate password hashes with `mkpasswd`.
+        3. Set `myOpt.openssh.port` whenever SSH is enabled.
+        4. Set `myOpt.ipv6.public-address`, using `null` when static IPv6 is unwanted.
+        5. The laptop layer supplies `myOpt.ipv6.public-address = null`.
+        6. Set `myOpt.dnscrypt.ipv6.disable` for DNS filtering and Cloudflared transport selection.
+        7. Set `system.stateVersion` in the host configuration.
+        8. Set `myOpt.disk.id` and `myOpt.disk.device` when using disko.
+        9. Supply `nixpkgs.hostPlatform`, `networking.hostName`, and workload-specific options downstream.
+    7. The installation flow is inferred and requires verification.
+        1. Partition with disko using a GPT BIOS partition, a 500 MiB ESP, and compressed btrfs `@root` and `@nix` subvolumes.
+        2. Generate `install/facter.json` with `nixos-anywhere --generate-hardware-config nixos-facter ./facter.json`.
+        3. Provision the age key at `/var/lib/sops-nix/key.txt` before removing the reminder import.
+        4. Complete `install/nixos-hardware.nix` with the matching hardware module.
+        5. Deploy the downstream host with `nixos-rebuild switch --flake .#<host>` or `nixos-anywhere`.
+    8. Known issues retain their original identifiers.
+        1. **G1** records resolved namespace-consumer mismatches in `camofox.nix`, `fastcrw.nix`, and `litellm.nix`.
+            1. Old helpers expected `path`, `resolvConf`, and `unit`, while `netns.nix` exposes `nsPath` and `serviceUnit`.
+            2. Compose modules now own namespace and cgroup wiring through `set-network-namespace` and `set-cgroup-parent`.
+            3. Maintainer intent recorded on 2026-11-07 explicitly excludes DNS and direct Internet access from these namespaces.
+        2. **G2** records the intentionally host-imported installation layer and its unfinished checklist.
+            1. Keep the age-key and hardware `throw` reminders until each host satisfies them.
+        3. **G3** records dormant directories outside the live import graph.
+            1. Dormant code still requires valid syntax for formatters, analyzers, and editors.
+        4. **G4** records missing `pkgs.pkgs-2611` and `pkgs.pkgs-2605` overlays.
+            1. ActivityWatch requires `pkgs-2611` unconditionally, while enabled EasyEffects requires `pkgs-2605`.
+            2. Define these scopes in `laptop-base/common/nixpkgs-overlays.nix` or provide them downstream.
+        5. **G5** records SSH's `ports = [cfg.port]` with a `null` port default.
+        6. **G6** records undeclared `cfg.n8n.serviceName` and `cfg.proxy-compose.hostname` reads in `n8n-compose.nix`.
+        7. **G7** records TLP phone autosuspend exclusions, the `SAV` startup profile, and 75/80 percent battery thresholds.
+        8. **G8** records the intentional `Asia/Ho_Chi_Minh` timezone and `en_DK.UTF-8` time locale.
+        9. **G9** records 400 percent zram, forced empty `swapDevices`, and disabled disk writeback.
+    9. Route maintenance work to the relevant layer.
+        1. Add service modules under `nixos-base/services/` and register them in its `default.nix`.
+        2. Model composed applications on `plausible-compose.nix` or `keycloak-compose.nix`.
+        3. Edit `nixos-base/terminal/` for CLI packages and aliases.
+        4. Edit `laptop-base/de.nix` or the desktop toggles to change desktop environments.
+        5. Add GUI packages to `laptop-base/home-manager/packages.nix`.
+        6. Update centralized image tags in `myPkgs/oci-img.nix` and pass them explicitly to service options.
+        7. Add shared helpers under `myLib/` and register them in `myLib/default.nix`.
+    10. Validate downstream hosts before relying on these notes.
+        1. Read the shared and laptop `default.nix` import lists first.
+        2. Treat the source tree as authoritative because the original snapshot had only squashed history.
+        3. Resolve **G4** before evaluating a fresh laptop profile.
+        4. Run Nix evaluation and builds against a configured downstream host rather than relying on module exports alone.

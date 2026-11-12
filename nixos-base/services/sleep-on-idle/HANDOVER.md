@@ -1,83 +1,62 @@
-- This is the handover for `nixos-base/services/sleep-on-idle/`.
-  - Snapshot
-    - The source snapshot is dated 2026-11-07 on branch `arena/a7026f5a-my-nixos-base` at commit `66ded62` and was not build-tested.
-    - This file was reshaped into nested bullets on 2026-11-07 (branch `arena/056af839-my-nixos-base`, commit `c103788`) without re-verifying its claims.
-
-  - What this directory is for
-    - It provides **on-demand services that cost nothing when unused**.
-    - A unix-socket proxy sits in front of an app, and when the app is idle its whole cgroup slice is `systemctl freeze`d, so the next connection to the socket thaws it, runs a health check and hands over.
-    - This is the mechanism that lets roughly 15 containers coexist on one small VPS.
-    - The implementation is split so that each concern lives in its own file:
-      - `options.nix` declares `myOpt.sleep-on-idle.<name>`.
-      - `socket.nix` creates one `.socket` per endpoint with `wantedBy = sockets.target`.
-      - `proxy.nix` creates one `systemd-socket-proxyd` service per endpoint plus the health-check script.
-      - `slice.nix` creates one `<sliceName>.slice` per instance.
-      - `freeze.nix` provides the `sleep-on-idle-freeze@<slice>` unit that freezes and thaws.
-      - `set-cgroup-parent.nix` pushes the *real* services into that slice.
-      - `default.nix` is the import list with the `# ./default.nix` marker.
-      - **⚠ verify:** the prose in the previous version of this document said "five files", but the directory actually holds seven `.nix` files.
-
-  - Data model
-    - An instance is written as `myOpt.sleep-on-idle.<name> = { … };` with `enable = true;` by default.
-    - `sliceName = name;` yields the unit `<sliceName>.slice`.
-    - `endpoints.<ep>` holds one endpoint per key.
-      - `origin = { host, port };` is where the real app listens and is unbracketed.
-      - `proxy  = { host, port, ip-socket };` defaults its ip-socket to `/run/sleep-on-idle/<slice>/<ep>.sock`.
-      - `name   = "sleep-on-idle-proxy@<slice>-<ep>";` is a read-only unit name.
-    - `exit-idle-time = 300;` is the seconds value passed to `--exit-idle-time`.
-    - `TimeoutStartSec = 30;` bounds startup.
-    - `health-check = { host, port, ip-socket, path, sleep = "1"; };` configures the readiness probe.
-    - `set-cgroup-parent = { systemd-services = [ … ]; oci-containers = [ … ]; nixos-containers = [ … ]; };` selects the units to move into the slice.
-    - `freezeName` and `freezeUnit` are read-only.
-    - `origin`, `proxy` and `health-check` all come from `pkgs.myLib.mkEndpointOpt`, whose bracket rules are documented in [`../../../myLib/HANDOVER.md`](../../../myLib/HANDOVER.md).
-    - Note the split, because `origin` and `proxy` are unbracketed and bracketed respectively **for systemd**, while `health-check` is **bracketed** because it is used to build a `curl` URL.
-
-  - The lifecycle, end to end
-    - A client connects to `/run/sleep-on-idle/<slice>/<ep>.sock`.
-      - The socket unit sets `TriggerLimitBurst = 0` and `NoDelay = true`.
-    - That triggers `sleep-on-idle-proxy@<slice>-<ep>.service`.
-      - The service `requires`/`after` the `.socket` plus `sleep-on-idle-freeze@<slice>.service`.
-      - Its `ExecStartPre` runs the health-check loop, and the thaw happens because the freeze unit is started.
-      - Its `ExecStart` is `systemd-socket-proxyd --exit-idle-time=<exit-idle-time> <origin.ip-socket>`.
-    - The app's units live in `<slice>.slice`, placed there by `set-cgroup-parent`.
-      - The freeze unit sets `ExecStart = -systemctl thaw %i.slice`.
-      - The freeze unit sets `ExecStop  = -systemctl freeze %i.slice`.
-    - Key details of that lifecycle:
-      - **The freeze unit is started, not stopped, to wake**, because `freeze.nix` sets `RemainAfterExit = true`, `StopWhenUnneeded = true`, `ExecStart = thaw` and `ExecStop = freeze`.
-        - Because the proxy `requires` it, stopping the proxy, which happens when `systemd-socket-proxyd` exits after `--exit-idle-time`, stops the freeze unit and therefore runs `ExecStop` = freeze, which is elegant and easy to misread.
-      - **Both `ExecStart` and `ExecStop` are prefixed with `-`**, so "already frozen" or "not frozen" is not an error.
-      - **`set-cgroup-parent.nix` forces `wantedBy = ["<freezeUnit>"]`** on the app units and `StopWhenUnneeded = false`, so the app is only wanted while the freeze unit is active and is not torn down by unrelated unneeded-propagation.
-        - It also injects `--cgroup-parent=<slice>` into oci-containers, because podman otherwise escapes the slice.
-      - **The health check is a build-time script** created with `writeShellScriptBin "<slice>-health-check"` containing a `until … do sleep …` loop.
-        - It has three branches, where unix socket plus `phpfpm` uses `cgi-fcgi -bind -connect`, any other unix socket uses `curl --unix-socket`, and TCP uses plain `curl`.
-        - `assert (health-check.ip-socket != null)` guards a missing default.
-      - **`TriggerLimitBurst = 0`** disables systemd's start-rate limiter on the socket, because otherwise a burst of connections would trip the limiter and *permanently* refuse the socket.
-      - The default `exit-idle-time` is 300 s, so a "cold" service costs one round trip of health check plus thaw per five minutes of idle time rather than per request.
-
-  - Consumers
-    - These are found by grepping for `myOpt.sleep-on-idle`.
-    - `services/proxy-compose.nix` creates an instance per published app with id `cfg.sleep-on-idle-id`.
-    - `services/squid.nix` puts the squid unit and its two proxyd units in a slice.
-    - `services/compose/*-compose.nix` uses it for n8n, plausible, frappe, keycloak, hermes-agent and chatwoot.
-    - `services/compose/frappe-v16-compose/frappe-compose.nix` also references `myOpt.sleep-on-idle.<id>.endpoints.default.proxy.name` inside the netns's `set-network-namespace.systemd-services`, so it needs the instance to exist with a `default` endpoint.
-      - That is a **cross-module read of a declared option**, so changing the sleep-on-idle option shape breaks frappe.
-
-  - Gotchas
-    - **`endpoints.default` is assumed by several modules** even though the option allows any key, so defining only `endpoints.api` makes `proxy-compose.nix` fail at evaluation when it reads `endpoints.default.proxy.ip-socket` in `default-caddy-origin-unix-socket`.
-    - **`health-check.ip-socket` defaults to `endpoints.default.origin.ip-socket`**, so a missing `origin` makes the `assert` fire with a very unhelpful "assertion failed" message.
-    - **The health-check runs *inside the host namespace*.**
-      - For a netns-attached app the origin `::1:port` is not the host's `::1`, so the composed modules either attach the proxy to the namespace via `myOpt.netns…` or point `origin.ip-socket` at the proxied unix socket.
-    - **Freezing is a cgroup operation**, so anything the app holds open such as sockets or DB connections is frozen mid-flight.
-      - Only idempotent, restartable services belong in a slice, so do not add a database to `set-cgroup-parent` blindly.
-    - `freeze.nix` uses `${config.systemd.package}/bin/systemctl` **without** `--machine` or `sudo`, and the unit runs as root with no sandboxing, which is the one place where the repo trades hardening for "it must work".
-    - Slices are created empty via `nameValuePair cfg.sliceName {}`, and systemd creates the cgroup on first member.
-
-  - How to extend
-    - Add an endpoint to an existing instance by declaring `endpoints.<ep>`, or create a whole instance and reference its `freezeUnit`/`sliceUnit` from a service module's `set-cgroup-parent`.
-    - Start from `services/compose/plausible-compose.nix` for a realistic example.
-    - If your app has no HTTP health endpoint, point `health-check` at whatever is cheap and idempotent, as the frappe module does with `/api/method/ping`.
-
-  - See also
-    - [`../HANDOVER.md`](../HANDOVER.md) covers primitives 2, 4 and 5 and the composition diagram.
-    - [`../../../myLib/HANDOVER.md`](../../../myLib/HANDOVER.md) covers `mkEndpointOpt` and the bracket rules.
-    - [`../compose/HANDOVER.md`](../compose/HANDOVER.md) covers the biggest consumers.
+1. `sleep-on-idle/` provides socket-activated applications with idle cgroup freezing.
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../../HANDOVER.md).
+    2. Seven Nix files separate the mechanism's concerns.
+        1. `default.nix` imports the implementation files and retains the self-import comment marker.
+        2. `options.nix` declares `myOpt.sleep-on-idle.<name>`.
+        3. `socket.nix` creates endpoint socket units wanted by `sockets.target`.
+        4. `proxy.nix` creates endpoint proxy services and health-check scripts.
+        5. `slice.nix` creates each instance's cgroup slice.
+        6. `freeze.nix` defines the freeze and thaw service template.
+        7. `set-cgroup-parent.nix` places selected workloads into the slice.
+    3. Instances describe endpoints, readiness, and workload membership.
+        1. `enable` defaults to `true` and `sliceName` defaults to the instance name.
+        2. `endpoints.<endpoint>.origin` describes the application endpoint in unbracketed form.
+        3. Proxy endpoints default to `/run/sleep-on-idle/<slice>/<endpoint>.sock`.
+        4. Read-only proxy names follow `sleep-on-idle-proxy@<slice>-<endpoint>`.
+        5. `exit-idle-time` defaults to 300 seconds and `TimeoutStartSec` defaults to 30 seconds.
+        6. Health-check options select an endpoint, path, and retry sleep interval defaulting to `1`.
+        7. `set-cgroup-parent` selects systemd services, OCI containers, and NixOS containers.
+        8. `freezeName` and `freezeUnit` are read-only derived values.
+        9. [`mkEndpointOpt`](../../../myLib/HANDOVER.md) brackets proxy listeners and curl targets while leaving origins unbracketed.
+    4. A client connection activates the proxy and wakes the application.
+        1. Endpoint sockets set `TriggerLimitBurst = 0` and `NoDelay = true`.
+        2. Proxy services require and follow their socket and freeze unit.
+        3. Starting the freeze unit runs `systemctl thaw %i.slice`.
+        4. `ExecStartPre` waits for the readiness probe before forwarding traffic.
+        5. `ExecStart` runs `systemd-socket-proxyd --exit-idle-time=<seconds> <origin.ip-socket>`.
+        6. Idle proxy exit releases the freeze unit and triggers `systemctl freeze %i.slice`.
+    5. Freeze-unit lifecycle semantics are intentionally inverted.
+        1. `RemainAfterExit = true` keeps the thaw unit active after its start command completes.
+        2. `StopWhenUnneeded = true` freezes the slice when no proxy needs the unit.
+        3. Both systemctl commands use a leading `-` so redundant state changes do not fail the unit.
+        4. Workload units receive forced `wantedBy = [freezeUnit]` and `StopWhenUnneeded = false`.
+        5. OCI containers also receive `--cgroup-parent=<slice>` to prevent Podman escaping the slice.
+        6. Disabling socket trigger limits avoids burst-related refusal.
+    6. Health checks select transport-specific probes.
+        1. Scripts are generated at build time with `writeShellScriptBin`.
+        2. PHP-FPM socket paths containing `phpfpm` use `cgi-fcgi -bind -connect`.
+        3. Other unix sockets use `curl --unix-socket`.
+        4. TCP endpoints use ordinary curl with bracketed IPv6 URLs.
+        5. A missing health-check socket triggers an assertion.
+        6. The default health-check endpoint derives from `endpoints.default.origin`.
+    7. Consumers depend on the default endpoint contract.
+        1. `proxy-compose.nix` creates an instance for each published application.
+        2. Squid groups its service and proxy units into a slice.
+        3. Compose modules use the mechanism for Plausible, Keycloak, Frappe, Hermes, n8n, and parked Chatwoot.
+        4. Frappe reads `endpoints.default.proxy.name` when assigning proxy units to its namespace.
+        5. Defining only differently named endpoints breaks consumers expecting `endpoints.default`.
+    8. Namespace and freeze boundaries require deliberate review.
+        1. Probes run in the proxy unit's namespace, which remains the host namespace unless explicitly reassigned.
+        2. Namespace-local loopback requires matching proxy placement or an accessible unix-socket bridge.
+        3. Freezing pauses open sockets and database connections without closing them.
+        4. Do not add databases or non-idempotent workloads to a shared freeze slice blindly.
+        5. Freeze units run root systemctl without additional sandboxing.
+        6. Empty slice declarations acquire cgroups when workloads join them.
+    9. Extend the mechanism through existing endpoint and membership options.
+        1. Add endpoints or instances while preserving default-endpoint contracts.
+        2. Follow `plausible-compose.nix` for a complete integration example.
+        3. Prefer cheap, idempotent readiness probes such as Frappe's `/api/method/ping`.
+    10. Read the related handovers before changing shared contracts.
+        1. The [services handover](../HANDOVER.md) describes proxies, Squid, and publication.
+        2. The [library handover](../../../myLib/HANDOVER.md) describes endpoint normalization.
+        3. The [compose handover](../compose/HANDOVER.md) describes major consumers.

@@ -1,115 +1,85 @@
-- This is the handover for `nixos-base/services/compose/frappe-v16-compose/`.
-  - Snapshot
-    - The source snapshot is dated 2026-11-07 on branch `arena/a7026f5a-my-nixos-base` at commit `66ded62`, and it was not build-tested because the authoring sandbox had no `nix` and no podman.
-    - This file was reshaped into nested bullets on 2026-11-07 (branch `arena/056af839-my-nixos-base`, commit `c103788`) without re-verifying its claims.
-
-  - What this directory is for
-    - It runs a full **Frappe/ERPNext v16 bench** as podman containers on one host, covering frontend, backend, websocket, two queue workers, scheduler, MariaDB, two Valkey instances, configurator, create-site and migrate, which makes it the single most complex piece of the repo.
-    - The interesting part is not the container list but two build-time/run-time tricks:
-      - **The bench lives in the Nix store**, because `frappe-bench-store.sh` `podman run`s the official `frappe/build` image to `bench init` into a temp dir, then `nix store add-path`s the result and points a **gcroot** symlink at it.
-        - That symlink is both GC protection *and* the stable mount source for every container.
-      - **Everything inner-container talks over unix sockets**, since MariaDB runs with `--skip-networking`, both Valkey instances use `--port 0 --unixsocket`, and gunicorn binds `unix:/run/frappe/gunicorn.sock`.
-        - Only the frontend nginx listens on `127.0.0.1:8080`, and that is inside a network namespace.
-    - The host-side layout is a oneshot `<name>-build.service` running `frappe-bench-store.sh` to produce the Nix store path and gcroot.
-      - That build unit is `requiredBy: container@<name>-configurator.service`.
-    - Inside the netns `<netns-id>` the stack consists of these members:
-      - mariadb running as 999:999 with skip-networking on `/run/mysqld/mysqld.sock`.
-      - valkey-cache with `--port 0`, `/run/valkey-cache/valkey.sock` and `--save ''`.
-      - valkey-queue with `--port 0`, `/run/valkey-queue/valkey.sock` and a persistent dir.
-      - The chain configurator → create-site → migrate → backend/queue-*/scheduler/websocket.
-      - The frontend nginx on `127.0.0.1:8080`.
-      - `squid@<name>` for the egress allowlist plus the sleep-on-idle proxies.
-    - Outside the namespace, `proxy-compose.<id>` maps a caddy vhost or cloudflared tunnel onto the sleep-on-idle socket.
-
-  - Files
-    - `default.nix` imports `frappe-compose.nix` plus `options.nix`.
-    - `options.nix` holds **all** the options for `myOpt.frappe-v16-compose.<name>` in 236 lines with no `config`.
-    - `frappe-compose.nix` is the implementation covering containers, units, tmpfiles and the netns/squid/proxy wiring.
-    - `frappe-bench-store.sh` runs host-side to build the bench with podman, capture it into the Nix store, gcroot it and record a spec hash.
-    - `bench-init.sh` runs **in-container** to `bench init --apps_path=/opt/frappe/apps.json …`, strip `.git` and drop `logs`.
-    - `bench-readonly.sh` is a host-side guard used instead of the store script when `frappe.readOnlyMode = true`.
-    - `configurator.sh` runs **in-container** to write `sites/common_site_config.json` with the db socket, both valkey sockets, the socketio port, maintenance flags and `host_name`.
-    - `create-site.sh` runs **in-container** to wait for sockets and config, run `bench new-site` and mark `sites/<site>/.site-created`.
-    - `migrate.sh` runs **in-container** to wait for `.site-created`, install missing apps from `$APPS` and run `bench migrate`.
-    - `unmaintained/frappe-compose.backup.nix` is a 576-line earlier version documented in [its handover](unmaintained/HANDOVER.md).
-    - `options.nix` and `frappe-compose.nix` are deliberately split because the option tree is big enough that mixing it with `config` becomes unreadable, so keep that split.
-
-  - Option surface (abridged)
-    - An instance is `myOpt.frappe-v16-compose.<name>` with `enable = true;`.
-    - `proxy-compose-id = name;` is the key into `myOpt.proxy-compose`.
-    - `sleep-on-idle-id` is derived from proxy-compose and is readOnly.
-    - `netns-id = name;` selects the network namespace.
-    - `sopsFile = name;` names one sops file holding both env files.
-    - `frappe.readOnlyMode = false;` is the switch that makes redeploys safe.
-    - `frappe.stateDir`, `sitesPath`, `logsPath`, `benchDir` and `siteName` control the storage layout.
-    - `frappe.apps.<app> = { enable; url = "https://github.com/frappe/<app>"; branch; };` declares the apps to install.
-    - `frappe.base.tag  = "v16.x.y"` selects the image `docker.io/frappe/base:<tag>`.
-    - `frappe.build.tag` defaults to `frappe.apps.erpnext.branch`.
-    - `mariadb.{image,stateDir,envfile-key}` configures the database container.
-    - `valkey.{image,stateDir}`, `valkey.cache.{containerName,socket-folder}` and `valkey.queue.{…}` configure the two Valkey containers.
-    - `modules.{proxy-compose,squid}` are the pass-through blocks.
-    - The sops file must contain `<name>/frappe_envfile` with `INIT_ADMIN_PASSWORD` and `DB_PASSWORD`, plus `<name>/mariadb_envfile` with `MARIADB_ROOT_PASSWORD`.
-
-  - Invariants and assertions
-    - `!(frappe.apps ? "erpnext") || frappe.build.tag == frappe.apps.erpnext.branch` holds because the ERPNext app branch and the builder image tag are the **same thing**, as seen in `frappe_docker/docker-bake.hcl`.
-    - `!(frappe.apps ? "helpdesk") || frappe.apps ? "telephony"` holds because helpdesk requires telephony.
-    - The build unit's `requiredBy`/`before` the configurator ensures **nothing else may start before the bench exists**.
-    - `dependsOn` chains the OCI containers as mariadb plus valkeys → configurator → create-site → migrate → backend, queues, scheduler and websocket → frontend.
-    - `readOnlyMode = true` flips four things at once:
-      - The build unit runs `bench-readonly.sh`, which *fails* if no bench exists.
-      - create-site runs with `READONLY=1` and refuses to create a new site.
-      - migrate short-circuits.
-      - The configurator sets `maintenance_mode=1` plus `allow_reads_during_maintenance=1`.
-
-  - The `readOnlyMode` story (worth internalising)
-    - This is the deploy-safety mechanism.
-    - The first deployment must be `readOnlyMode = false`, because it builds the bench into the store, creates the site, installs apps and migrates.
-    - Afterwards you flip it to `true`, and redeploying **cannot** touch the bench or the site because the build unit only checks that a bench exists and warns that changes are ignored.
-    - `migrate.sh` logs `readOnlyMode is enabled; skipping app sync and migrate.`
-    - To actually upgrade you therefore set `false`, switch, and set it back.
-    - `bench-readonly.sh` exits 1 rather than 0 when there is no bench, precisely so a fresh host does not silently come up broken.
-
-  - Storage layout
-    - `tmpfiles` creates the paths with exact ownership, where Frappe containers run as uid 1000, MariaDB and Valkey as 999, and group 0.
-      - `<frappe.stateDir><sitesPath>` is `0770 1000:0` and holds `sites/` and `assets/`.
-      - `<frappe.stateDir><logsPath>` is `0770 1000:0`.
-      - `<backend.socket-folder>` is `0750 1000:0` at `/run/<name>/backend`.
-      - `<mariadb.stateDir>` is `0700 999:999`.
-      - `<mariadb.socket-folder>` is `0750 999:0`.
-      - `<valkey.stateDir>` is `0750 999:0`.
-      - `<valkey.queue.stateDir>` is `0700 999:0` plus `Z` for a recursive chown.
-      - `<valkey.cache.socket-folder>` is `0750 999:0`.
-      - `<valkey.queue.socket-folder>` is `0750 999:0`.
-    - Getting these wrong is the number one cause of "container exits immediately", because MariaDB refuses to start if `datadir` is not `0700` and owned by 999, and gunicorn cannot bind if the socket folder is not writable by 1000.
-
-  - Gotchas
-    - **The bench is in the Nix store and is mounted `:O`** as an overlay, so writes stay in the container's overlay except for the explicitly mounted `sites`/`logs` dirs, and you should not expect `bench` commands run by hand outside the container to persist.
-    - **`frappe-bench-store.sh` writes to the store as the invoking user**, so the unit must run as root or with `nix.settings.trusted-users` covering it, and `nix store add-path` plus `nix-store --add-root` are the two privileged steps.
-    - **The spec hash is `<apps.json><branch><builder-tag>` sha256 truncated to the first 12 chars** and is stored next to the gcroot as `<GCROOT>-hash`.
-      - `FORCE=1` bypasses the skip.
-      - The consequence is that changing *anything else* such as env or resource limits does not rebuild the bench, while changing the apps list does.
-      - `apps.json` is a `writeText` in the store, so its path changes with content and the hash follows.
-    - **`bench-init.sh` `rm -rf`s `.git` and `logs`** before capture so the store path is small and reproducible-ish, and it also seeds `sites/common_site_config.json` with `{}` so the configurator has something to merge into.
-    - **`configurator.sh` writes `sites/apps.txt`** from `ls -1 apps`, without which `bench` complains about a missing apps list.
-    - **The `assets` bind mount is a sub-path of `sites`** at `<benchDir>/sites/assets`, mounted read-only and `noexec`, while the overlay `:O` mount of the whole bench is the writable one, so the ordering of these two mounts matters.
-    - **Socket paths are duplicated three times** as host path, in-container path and the env var `*_SOCKET`, so changing one without the others yields a container that hangs in `create-site.sh`'s `until [ -S … ]` loop forever.
-    - **`mariadb-socket` is passed as `--socket=`** with `--skip-networking`, so there is no TCP path to the database at all, and `MARIADB_SERVICE = "localhost"` in the configurator only satisfies Frappe's config schema.
-    - **The frontend binds `127.0.0.1:8080`**, and `proxy-compose`'s health check for frappe is `endpoints.default.origin = { host = "127.0.0.1"; port = 8080; }` with `/api/method/ping`.
-      - Inside a netns that `127.0.0.1` is the namespace's loopback rather than the host's.
-    - **G1 applies here too**, but `frappe-compose.nix` reads `myOpt.netns.<id>` only for its own `set-network-namespace` declaration so it is fine.
-      - However `myOpt.sleep-on-idle.<id>.endpoints.default.proxy.name` is read cross-module, meaning the sleep-on-idle instance must exist with a `default` endpoint.
-    - The whole stack is `autoStart = false`, and `hostname` comes from `cfg.modules.proxy-compose.hostname` and is baked into the configurator's `HOST_NAME` as `https://…`.
-      - If you change the tunnel hostname you must re-run the configurator container rather than just the tunnel.
-
-  - Upgrading Frappe (checklist)
-    - Bump `frappe.base.tag` **and** `frappe.apps.<app>.branch`, which must agree because the assertion enforces it.
-    - Bump `mariadb.image` and `valkey.image` from [`../../../../myPkgs/oci-img.nix`](../../../../myPkgs/oci-img.nix).
-    - Set `readOnlyMode = false`, switch, and watch `<name>-build` → configurator → create-site → migrate.
-    - Set `readOnlyMode = true` again and switch.
-    - If the site is half-created, `create-site.sh` refuses to touch it and prints the two recovery options, namely `touch sites/<site>/.site-created` or `bench drop-site … --force --no-backup`, so read that message before improvising.
-
-  - See also
-    - [`../HANDOVER.md`](../HANDOVER.md) covers compose patterns, nspawn vs podman and `ephemeral`.
-    - [`../../sleep-on-idle/HANDOVER.md`](../../sleep-on-idle/HANDOVER.md) covers the freeze/thaw front door.
-    - [`../../HANDOVER.md`](../../HANDOVER.md) covers `squid.nix` for the egress allowlist and `netns.nix`.
-    - [`unmaintained/HANDOVER.md`](unmaintained/HANDOVER.md) covers the previous generation of this module.
+1. `frappe-v16-compose/` runs a complete Frappe and ERPNext v16 bench through Podman.
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../../../HANDOVER.md).
+        1. The authoring sandbox lacked both Nix and Podman.
+    2. The bench and runtime use separate storage mechanisms.
+        1. A host `<name>-build.service` builds the bench with the official `frappe/build` image.
+        2. `frappe-bench-store.sh` captures the result with `nix store add-path` and protects it with a gcroot symlink.
+        3. That gcroot provides the stable bench mount source for runtime containers.
+        4. Containers mount the bench with `:O` while sites and logs use persistent bind mounts.
+        5. MariaDB, both Valkey instances, and Gunicorn communicate through unix sockets.
+        6. Only frontend nginx listens on `127.0.0.1:8080` inside the workload namespace.
+        7. Caddy or Cloudflared reaches the application through proxy-compose and sleep-on-idle.
+    3. Files separate options, orchestration, and lifecycle scripts.
+        1. `default.nix` imports `options.nix` and `frappe-compose.nix`.
+        2. `options.nix` declares the large option tree without implementation configuration.
+        3. `frappe-compose.nix` creates containers, units, directories, namespaces, and proxy wiring.
+        4. `frappe-bench-store.sh` builds, captures, gcroots, and hashes the bench specification.
+        5. `bench-init.sh` initializes apps, strips Git metadata and logs, and seeds empty common-site configuration.
+        6. `bench-readonly.sh` checks for an existing bench without rebuilding it.
+        7. `configurator.sh` writes database sockets, Valkey sockets, Socket.IO settings, maintenance flags, and hostname configuration.
+        8. `create-site.sh` waits for prerequisites, creates a site, and writes `.site-created`.
+        9. `migrate.sh` waits for the marker, installs missing apps, and migrates the site.
+        10. The [unmaintained handover](unmaintained/HANDOVER.md) describes the previous implementation.
+    4. Each `myOpt.frappe-v16-compose.<name>` instance exposes deployment options.
+        1. `enable` defaults to `true`.
+        2. `proxy-compose-id` and `netns-id` default to the instance name.
+        3. Read-only `sleep-on-idle-id` derives from proxy-compose.
+        4. `sopsFile` defaults to the instance name.
+        5. `frappe.readOnlyMode` defaults to `false`.
+        6. Frappe storage options include `stateDir`, `sitesPath`, `logsPath`, `benchDir`, and `siteName`.
+        7. `frappe.apps.<app>` selects enabled repositories and branches.
+        8. `frappe.base.tag` selects `docker.io/frappe/base:<tag>`.
+        9. `frappe.build.tag` defaults to the ERPNext branch.
+        10. MariaDB options select its image, state directory, and environment-secret key.
+        11. Valkey options select images, persistent state, container names, and cache or queue socket folders.
+        12. `modules.proxy-compose` and `modules.squid` pass host configuration through.
+        13. The Frappe env file must provide `INIT_ADMIN_PASSWORD` and `DB_PASSWORD` under `<name>/frappe_envfile`.
+        14. The MariaDB env file must provide `MARIADB_ROOT_PASSWORD` under `<name>/mariadb_envfile`.
+    5. Assertions and dependencies enforce deployment ordering.
+        1. An enabled ERPNext declaration requires its branch to match `frappe.build.tag`.
+        2. Declaring Helpdesk requires Telephony.
+        3. The build unit must complete before the configurator starts.
+        4. MariaDB and Valkey precede configurator, create-site, migrate, backend workers, and frontend in dependency order.
+        5. Runtime components include backend, websocket, scheduler, two queue workers, and frontend.
+    6. Read-only mode is the deployment-safety mechanism.
+        1. First deployment requires `readOnlyMode = false` to build, create, install, and migrate.
+        2. Read-only mode uses `bench-readonly.sh` and fails if no bench exists.
+        3. It sets `READONLY=1` so create-site refuses new site creation.
+        4. It skips app synchronization and migration.
+        5. It enables `maintenance_mode` and `allow_reads_during_maintenance`.
+        6. Set read-only mode after successful deployment to prevent unintended bench and site changes.
+        7. Temporarily disable it for deliberate upgrades and restore it afterward.
+    7. Tmpfiles ownership is part of the runtime contract.
+        1. Frappe sites and logs use mode `0770` with ownership `1000:0`.
+        2. The backend socket directory uses mode `0750` with ownership `1000:0`.
+        3. MariaDB state uses mode `0700` with ownership `999:999`.
+        4. MariaDB socket directories use mode `0750` with ownership `999:0`.
+        5. Valkey state and socket directories use mode `0750` with ownership `999:0`.
+        6. Valkey queue state uses mode `0700` with ownership `999:0` and recursive ownership correction.
+        7. Incorrect ownership prevents database startup or socket creation.
+    8. Store capture and mounts impose operational constraints.
+        1. Store insertion and gcroot creation require root or an appropriately trusted Nix user.
+        2. The rebuild key hashes the apps specification, branch, and builder tag into a 12-character prefix stored beside the gcroot.
+        3. `FORCE=1` bypasses the unchanged-specification skip.
+        4. Environment and resource-limit changes do not automatically rebuild the bench.
+        5. The configurator regenerates `sites/apps.txt` from installed app directories.
+        6. Assets mount read-only and noexec under `sites/assets`, so preserve mount ordering relative to the bench overlay.
+        7. Keep host socket paths, container socket paths, and socket environment variables synchronized.
+        8. MariaDB uses `--skip-networking` and `--socket`, while Valkey instances use `--port 0` and unix sockets.
+        9. The cache Valkey disables snapshots, while the queue Valkey keeps persistent state.
+        10. `MARIADB_SERVICE = "localhost"` satisfies application configuration without enabling database TCP.
+        11. Frontend health checks use `/api/method/ping` on namespace-local `127.0.0.1:8080`.
+        12. Namespace wiring requires a sleep-on-idle instance with `endpoints.default`.
+        13. Containers default to `autoStart = false`.
+        14. Hostname changes require rerunning the configurator because `HOST_NAME` embeds `https://<hostname>`.
+    9. Upgrade the stack deliberately.
+        1. Select compatible base-image tags, builder tags, and app branches while satisfying the ERPNext assertion.
+        2. Update MariaDB and Valkey images from the [central image definitions](../../../../myPkgs/oci-img.nix).
+        3. Disable read-only mode and watch build, configurator, create-site, and migrate complete.
+        4. Re-enable read-only mode after verification.
+        5. Read create-site's recovery guidance before touching partial-site markers or using destructive `bench drop-site` commands.
+    10. Read the related handovers for shared infrastructure.
+        1. The [compose handover](../HANDOVER.md) compares container runtimes and persistence.
+        2. The [sleep-on-idle handover](../../sleep-on-idle/HANDOVER.md) describes the freeze and thaw front door.
+        3. The [services handover](../../HANDOVER.md) describes namespaces and Squid egress.
+        4. The [previous-generation handover](unmaintained/HANDOVER.md) explains historical design differences.

@@ -1,41 +1,27 @@
-- This is the handover for `myPkgs/`.
-  - Snapshot
-    - The source snapshot is dated 2026-11-07 on branch `arena/a7026f5a-my-nixos-base` at commit `66ded62` and was not build-tested.
-    - This file was reshaped into nested bullets on 2026-11-07 (branch `arena/056af839-my-nixos-base`, commit `c103788`) without re-verifying its claims.
-
-  - What this directory is for
-    - It is a second custom scope on `pkgs`, **`pkgs.myPkgs`**, built with the same `makeScope`/`overrideScope` trick as [`../myLib`](../myLib/HANDOVER.md).
-    - Its only job today is to hold the **pinned OCI image tags** for the containerised services, so that image bumps are one-file, one-line changes instead of edits scattered across five compose modules.
-    - `myPkgs/default.nix` reads `nixpkgs.overlays = [ (final: prev: { myPkgs = prev.lib.makeScope prev.newScope (self: { oci-img = prev.callPackages ./oci-img.nix {}; }); }) ];`.
-
-  - Files
-    - `default.nix` creates `pkgs.myPkgs` and wires `oci-img`, using plain `overlays` rather than `mkBefore` because it assumes `myLib`-style ordering is not needed.
-    - `oci-img.nix` exposes `pkgs.myPkgs.oci-img.<name>` as an image reference **string** and is a `makeScope` of five pinned tags.
-
-  - Pinned images (`oci-img.nix`)
-    - `n8n_v2` is `docker.io/n8nio/n8n:2.28.7`, whose tag page comment points at hub.docker.com/r/n8nio/n8n/tags.
-    - `mariadb_v11_8` is `docker.io/mariadb:11.8.8`, whose tag page comment points at hub.docker.com/_/mariadb/tags.
-    - `chatwoot_v4` is `docker.io/chatwoot/chatwoot:v4.14.1-ce`, whose tag page comment points at hub.docker.com/r/chatwoot/chatwoot/tags.
-    - `pgvector_v0_8_pg18` is `docker.io/pgvector/pgvector:0.8.2-pg18-trixie`, whose tag page comment points at hub.docker.com/r/pgvector/pgvector/tags.
-    - `valkey_v8` is `docker.io/valkey/valkey:8.1.8-alpine`, whose tag page comment points at hub.docker.com/r/valkey/valkey/tags.
-    - The naming convention is `<app>_v<major>[_<minor>][_<variant>]`.
-    - The value is a **string** rather than a derivation, is fed to `virtualisation.oci-containers.containers.<name>.image` or to a `podman run` call, and is therefore never built or hashed by Nix.
-      - The consequence is that **an image bump is not reproducible from the flake lock**, because the tag *is* the pin and a moved tag silently changes what runs.
-
-  - Gotchas
-    - The per-service modules do **not** default to these attributes.
-      - For example `nixos-base/services/compose/n8n-compose.nix` declares `n8n.image = mkOption { example = "docker.io/n8nio/n8n:2.14.2"; }`, which is an `example` and not a `default`, so the host config must pass `pkgs.myPkgs.oci-img.n8n_v2` explicitly.
-      - The same applies to `frappe-v16-compose` (`mariadb.image`, `valkey.image`), mostly because those modules are also used with locally built images.
-    - There is a **version skew** worth knowing about, since `n8n_v2` is `2.28.7` while the `example` in `n8n-compose.nix` says `2.14.2`, making the example stale documentation rather than a pin.
-    - `myPkgs` is imported by `nixos-base/default.nix` and again by `vps-base/default.nix`, which is idempotent but means the overlay ordering is defined twice.
-    - `oci-img.nix` takes `{ lib, newScope }` and makes a *nested* scope, so the access path is `pkgs.myPkgs.oci-img.<attr>` at three levels rather than `pkgs.myPkgs.<attr>`.
-    - No `myPkgs` flake output exists, so like `myLib` it is only reachable through `nixos-base` or `vps-base`.
-
-  - How to extend
-    - Add the image tag to `oci-img.nix` with a comment linking to its tag page.
-    - If you need an actual derivation such as a wrapper or a patched package, add it to the `makeScope` body in `myPkgs/default.nix` as `foo = prev.callPackage ./foo.nix {};` and keep `oci-img` for strings only.
-    - Prefer consuming tags as `pkgs.myPkgs.oci-img.<name>` in host configs rather than hard-coding strings, so the bump stays a one-line diff.
-
-  - See also
-    - [`../nixos-base/services/compose/HANDOVER.md`](../nixos-base/services/compose/HANDOVER.md) covers the consumers.
-    - [`../myLib/HANDOVER.md`](../myLib/HANDOVER.md) covers the identical scope-building pattern.
+1. `myPkgs/` exposes centralized OCI image references through `pkgs.myPkgs.oci-img`.
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../HANDOVER.md).
+    2. `default.nix` creates the package scope through an overlay.
+        1. It uses `makeScope` and `prev.callPackages ./oci-img.nix {}`.
+        2. `oci-img.nix` creates a nested scope of image-reference strings rather than derivations.
+        3. Import `myPkgs`, `nixos-base`, or `vps-base` because no dedicated flake output exists.
+        4. Repeated imports through `nixos-base` and `vps-base` are deduplicated.
+    3. The snapshot pins five image tags.
+        1. `n8n_v2` refers to `docker.io/n8nio/n8n:2.28.7`.
+        2. `mariadb_v11_8` refers to `docker.io/mariadb:11.8.8`.
+        3. `chatwoot_v4` refers to `docker.io/chatwoot/chatwoot:v4.14.1-ce`.
+        4. `pgvector_v0_8_pg18` refers to `docker.io/pgvector/pgvector:0.8.2-pg18-trixie`.
+        5. `valkey_v8` refers to `docker.io/valkey/valkey:8.1.8-alpine`.
+        6. Attribute names follow `<app>_v<major>[_<minor>][_<variant>]`.
+    4. Consumers must select these tags explicitly.
+        1. Service image options generally provide examples rather than defaults.
+        2. Pass `pkgs.myPkgs.oci-img.<name>` from host configuration.
+        3. The n8n module's `2.14.2` example is stale relative to the centralized `2.28.7` tag.
+        4. Frappe also requires explicit MariaDB and Valkey image selections.
+        5. Tag strings are neither built nor content-hashed by Nix, so mutable tags remain outside flake-lock reproducibility.
+    5. Extend the scope according to the artifact type.
+        1. Add image strings to `oci-img.nix` with comments linking to upstream tag pages.
+        2. Add actual derivations to `myPkgs/default.nix` with `prev.callPackage` instead.
+        3. Keep host consumers on centralized attributes to make image bumps local changes.
+    6. Read the related handovers for scope and consumer details.
+        1. The [compose handover](../nixos-base/services/compose/HANDOVER.md) describes image consumers.
+        2. The [library handover](../myLib/HANDOVER.md) describes the sibling scope-building pattern.

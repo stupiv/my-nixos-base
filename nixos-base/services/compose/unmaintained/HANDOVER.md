@@ -1,42 +1,26 @@
-- This is the handover for `nixos-base/services/compose/unmaintained/`.
-  - Snapshot
-    - The source snapshot is dated 2026-11-07 on branch `arena/a7026f5a-my-nixos-base` at commit `66ded62` and was not build-tested.
-    - This file was reshaped into nested bullets on 2026-11-07 (branch `arena/056af839-my-nixos-base`, commit `c103788`) without re-verifying its claims.
-
-  - What this directory is for
-    - It holds retired or experimental compose-style modules.
-    - `../default.nix` has the line **commented out** as `# ./unmaintained`, so nothing here is imported and nothing here is evaluated by either flake output.
-    - It is a reference shelf.
-
-  - Contents
-    - `chatwoot-compose.nix` is 277 lines implementing Chatwoot plus `pgvector` PostgreSQL plus Valkey, all unix-socket with `autoStart = false`.
-      - It was superseded by the nspawn-based modules, of which `../plausible-compose.nix` is the closest live relative.
-      - It is an **OCI** podman design with in-container socket folders `/run/valkey`, `/run/chatwoot` and `/var/run/postgresql`, data dir `/data`, and env `POSTGRES_USER/POSTGRES_DB = "chatwoot"`.
-    - `compose-template.nix` is 51 lines and is a **skeleton** for a new compose module.
-      - It shows the minimal contract of a `modules.proxy-compose` pass-through, `serviceName = name` as readOnly, `networkNamespace`, `cgroup-parent`, and one `myOpt.proxy-compose` entry per instance.
-    - `wordpress/` is three files covering WordPress plus plugins and themes, documented in [`wordpress/HANDOVER.md`](wordpress/HANDOVER.md).
-
-  - `compose-template.nix` — read this before writing a new module
-    - It declares `options.myOpt.compose-template = attrsOf (submodule ({name, config, ...}: { options = { … }; }));`.
-    - Inside it, `enable` defaults to `true`.
-    - It declares `modules.proxy-compose = mkOption { type = types.anything; };`.
-    - It declares `serviceName = mkOption { type = types.singleLineStr; default = name; readOnly = true; };`.
-    - It declares `networkNamespace` and `cgroup-parent`.
-    - Its config sets `config.myOpt.proxy-compose = mapAttrs' (_: cfg: nameValuePair cfg.serviceName cfg.proxy-compose) enabled;`.
-    - It is the smallest possible expression of the "one instance → one `proxy-compose` entry" pattern.
-    - Note that it does **not** declare any container at all, because the actual workload is left to the caller.
-    - Note also that `serviceName = name` is `readOnly`, which is the convention in the live modules too.
-    - The caveat is that it declares `networkNamespace` and `cgroup-parent` as plain options and then **never uses them**, since in the live code those moved into `modules.sleep-on-idle` and `netns` as `set-cgroup-parent` and `netns-id`, so do not copy those two blindly.
-
-  - Gotchas
-    - **Being here does not make a file safe to ignore**, because a formatter, `deadnix` or an LSP still parses these files and a syntax error here breaks tooling even though it cannot break a system closure.
-    - **These modules reference `myOpt` keys that still exist** such as `proxy-compose` and `sleep-on-idle`, so `chatwoot-compose.nix` would probably *evaluate* if re-enabled.
-      - It predates the `set-env-vars` and netns work, so its wiring would be incomplete with no `set-network-namespace` and no `set-cgroup-parent`, making re-enabling it a port rather than a line uncomment.
-    - **`chatwoot-compose.nix` uses `myPkgs`-style pinned tags conceptually** for `pgvector`, `valkey` and `chatwoot` but hard-codes nothing.
-      - The tags now live in [`../../../../myPkgs/oci-img.nix`](../../../../myPkgs/oci-img.nix) as `chatwoot_v4`, `pgvector_v0_8_pg18` and `valkey_v8`, so if you revive it, wire those in instead of inventing new strings.
-    - The parent file uses the comment-only style `# ./unmaintained` rather than a `disabledModules` mechanism, so there is no runtime switch to flip and re-enabling means editing `../default.nix`.
-
-  - See also
-    - [`../HANDOVER.md`](../HANDOVER.md) covers the live modules and the shared patterns.
-    - [`wordpress/HANDOVER.md`](wordpress/HANDOVER.md) covers the WordPress stack.
-    - [`../../../../HANDOVER.md`](../../../../HANDOVER.md) covers **G3**.
+1. `compose/unmaintained/` stores retired and experimental application compositions.
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../../../HANDOVER.md).
+    2. The parent import list comments out `# ./unmaintained`.
+        1. No runtime toggle activates this directory.
+        2. Re-enabling modules requires editing imports and porting their wiring.
+        3. Dormant files still need valid syntax for formatters, analyzers, and editors.
+    3. `chatwoot-compose.nix` preserves an OCI-based Chatwoot stack.
+        1. Components include Chatwoot, pgvector PostgreSQL, and Valkey with unix sockets and `autoStart = false`.
+        2. Container socket paths include `/run/valkey`, `/run/chatwoot`, and `/var/run/postgresql`.
+        3. Persistent data uses `/data` and the PostgreSQL user and database are named `chatwoot`.
+        4. The stack predates current namespace, cgroup, and environment-injection primitives.
+        5. Revival requires current `set-network-namespace` and `set-cgroup-parent` integration rather than merely uncommenting an import.
+        6. Select `chatwoot_v4`, `pgvector_v0_8_pg18`, and `valkey_v8` from the [central image definitions](../../../../myPkgs/oci-img.nix).
+    4. `compose-template.nix` is a minimal but outdated skeleton.
+        1. It declares enabled-by-default `myOpt.compose-template` instances.
+        2. `serviceName` defaults to the instance name and is read-only.
+        3. It declares a `modules.proxy-compose` pass-through without creating a workload container.
+        4. Its mapping reads `cfg.proxy-compose` despite declaring `modules.proxy-compose`.
+        5. Its plain `networkNamespace` and `cgroup-parent` options are unused and should not be copied into new modules.
+        6. Prefer active compose examples for current namespace and cgroup wiring.
+    5. [`wordpress/`](wordpress/HANDOVER.md) preserves native WordPress composition and fetcher overlays.
+        1. That directory has no entry point and requires explicit imports even if its parent is revived.
+    6. Read the related handovers before porting dormant modules.
+        1. The [live compose handover](../HANDOVER.md) describes current application patterns.
+        2. The [WordPress handover](wordpress/HANDOVER.md) covers its fetchers and runtime.
+        3. The [root handover](../../../../HANDOVER.md) records dormant-directory issue **G3**.
