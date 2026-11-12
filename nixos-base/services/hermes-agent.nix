@@ -23,6 +23,9 @@ in {
           services.hermes-agent = mkOption {
             type = types.anything;
           };
+          containers = mkOption {
+            type = types.anything;
+          };
         };
         container.name = mkOption {
           type = types.singleLineStr;
@@ -70,6 +73,9 @@ in {
             readOnly = true;
           };
         };
+        lightpanda.package = mkOption {
+          type = types.package;
+        };
       };
     }));
   };
@@ -90,36 +96,48 @@ in {
       enabled);
 
     containers = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.container.name} = {
-          extraFlags = [
-            "--bind=${cfg.stateDir}:${cfg.stateDir}:idmap"
-            "--bind-ro=${cfg.sops.dotenv.path}:${cfg.sops.dotenv.path}:rootidmap"
-          ];
-          config = {...}: {
-            imports = [
-              inputs.hermes-agent.nixosModules.default
+        ${cfg.container.name} = mkMerge [
+          cfg.modules.containers
+          {
+            extraFlags = [
+              "--bind=${cfg.stateDir}:${cfg.stateDir}:idmap"
+              "--bind-ro=${cfg.sops.dotenv.path}:${cfg.sops.dotenv.path}:rootidmap"
             ];
+            config = {...}: {
+              imports = [
+                inputs.hermes-agent.nixosModules.default
+              ];
 
-            programs.nix-ld.enable = false;
+              programs.nix-ld.enable = false;
+              environment.systemPackages = cfg.hermes-agent-cfg.extraPackages;
 
-            users.users.${cfg.hermes-agent-cfg.user}.uid = cfg.uid;
-            users.groups.${cfg.hermes-agent-cfg.group}.gid = cfg.gid;
-            services.hermes-agent = mkMerge [
-              cfg.modules.services.hermes-agent
-              {
-                enable = true;
-                inherit (cfg) stateDir;
-                package = mkDefault cfg.modules.services.hermes-agent.package;
-                environmentFiles = [cfg.sops.dotenv.path];
-                backend = {
-                  inherit (cfg.modules.services.hermes-agent.backend) port;
-                  host = mkDefault "::1";
-                  mode = mkDefault "serve";
-                };
-              }
-            ];
-          };
-        };
+              users.users.${cfg.hermes-agent-cfg.user}.uid = cfg.uid;
+              users.groups.${cfg.hermes-agent-cfg.group}.gid = cfg.gid;
+              services.hermes-agent = mkMerge [
+                cfg.modules.services.hermes-agent
+                {
+                  enable = true;
+                  inherit (cfg) stateDir;
+                  package = mkDefault cfg.modules.services.hermes-agent.package;
+                  environmentFiles = [cfg.sops.dotenv.path];
+                  backend = {
+                    inherit (cfg.modules.services.hermes-agent.backend) port;
+                    host = mkDefault "::1";
+                    mode = mkDefault "serve";
+                  };
+                  settings.browser = {
+                    cloud_provider = "local";
+                    engine = "lightpanda";
+                  };
+                  extraPackages = with pkgs; [
+                    cfg.lightpanda.package
+                  ];
+                  addToSystemPackages = true;
+                }
+              ];
+            };
+          }
+        ];
       })
       enabled);
 

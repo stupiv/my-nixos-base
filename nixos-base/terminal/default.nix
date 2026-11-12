@@ -1,7 +1,6 @@
 {
   imports = [
     ./bat.nix
-    ./btop.nix
     ./clear.nix
     ./comma.nix
     # ./default.nix
@@ -10,6 +9,5 @@
     ./micro.nix
     ./misc.nix
     ./trash.nix
-    ./yazi.nix
   ];
 }

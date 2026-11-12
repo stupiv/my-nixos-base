@@ -6,8 +6,12 @@
     # nixpkgs-2611.follows = "hermes-agent/nixpkgs";
     hermes-agent = {
       url = "github:NousResearch/hermes-agent/v0.23.1"; # See https://github.com/NousResearch/hermes-agent/tags
-      # inputs.nixpkgs.follows = "nixpkgs"; # No inputs.nixpkgs.follows for hermes-agent.cachix.org to work
+      # inputs.nixpkgs.follows = "nixpkgs"; # No inputs.nixpkgs.follows for hermes-agent.cachix.org to work # No rebuild when update nixpkgs. Rebuiild only we update hermes-agent.
       # inputs.flake-parts.follows = "flake-parts";
+    };
+    lightpanda = {
+      url = "github:lightpanda-io/browser/1.0.3";
+      # inputs.nixpkgs.follows = "nixpkgs"; # No rebuild when update nixpkgs. Rebuiild only we update lightpanda.
     };
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -27,7 +31,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     disko = {
-      url = "github:nix-community/disko";
+      url = "github:nix-community/disko/?ref=latest";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";

@@ -24,9 +24,9 @@ in {
           hermes-agent = mkOption {
             type = types.anything;
           };
-          containers = mkOption {
-            type = types.anything;
-          };
+          # containers = mkOption {
+          #   type = types.anything;
+          # };
           # camofox-browser-oci = mkOption {
           #   type = types.anything;
           # };
@@ -130,7 +130,7 @@ in {
 
     containers = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.container.name} = mkMerge [
-          cfg.modules.containers
+          # cfg.modules.containers
           {
             ephemeral = true;
             autoStart = false;
