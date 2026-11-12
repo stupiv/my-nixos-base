@@ -8,13 +8,13 @@ with lib; let
 in {
   options.myOpt.ipv6 = {
     public-address = mkOption {
-      type = types.nullOr types.str;
+      type = types.nullOr types.singleLineStr;
     };
     interface = mkOption {
-      type = types.str;
+      type = types.singleLineStr;
     };
     gateway = mkOption {
-      type = types.str;
+      type = types.singleLineStr;
     };
   };
   config = mkIf (cfg.public-address != null) {

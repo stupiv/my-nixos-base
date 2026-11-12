@@ -61,8 +61,10 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d '${cfg.stateDir}' 0711 ${config.ids.uids.postgres} ${config.ids.gids.postgres} - -"
+    systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: let
+        inherit (outerCfg.ids) uids gids;
+      in [
+        "d '${cfg.stateDir}' 0711 ${toString uids.postgres} ${toString gids.postgres} - -"
       ])
       enabled);
 
@@ -90,14 +92,14 @@ in {
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.netns-id}.set-network-namespace = {
-          containers = [cfg.container.name];
+          nixos-containers = [cfg.container.name];
         };
       })
       (filterAttrs (_: cfg: cfg.netns-id != null) enabled));
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
-          containers = [cfg.container.name];
+          nixos-containers = [cfg.container.name];
         };
       })
       (filterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));

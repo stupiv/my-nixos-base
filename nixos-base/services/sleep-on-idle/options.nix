@@ -57,6 +57,10 @@ in {
                     type = types.singleLineStr;
                     default = "sleep-on-idle-proxy-${cfg.sliceName}-${endPointArgs.name}";
                   };
+                  netns-id = mkOption {
+                    type = types.nullOr types.singleLineStr;
+                    default = null;
+                  };
                 };
             };
           }));

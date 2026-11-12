@@ -58,7 +58,11 @@ in {
         };
         sleep-on-idle-id = mkOption {
           type = types.singleLineStr;
-          default = outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.sleep-on-idle-id;
+          default = name;
+        };
+        sleep-on-idle-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id};
           readOnly = true;
         };
         netns-id = mkOption {
@@ -72,11 +76,12 @@ in {
   config = mkIf (enabled != {}) {
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.netns-id}.set-network-namespace = {
-          systemd-services = [
-            outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id}.endpoints.default.proxy.serviceName
-          ];
+          # systemd-services = [
+          #   cfg.sleep-on-idle-cfg.endpoints.default.proxy.serviceName
+          # ];
+          systemd-services = [];
           oci-containers = [];
-          containers = [cfg.container.name];
+          nixos-containers = [cfg.container.name];
         };
       })
       enabled);
@@ -85,11 +90,17 @@ in {
       nameValuePair cfg.proxy-compose-id (mkMerge [
         cfg.modules.proxy-compose
         {
+          inherit (cfg) sleep-on-idle-id;
           enable = true;
           modules.sleep-on-idle = {
             health-check.path = "/";
-            endpoints.default.origin = {
-              inherit (outerCfg.myOpt.keycloak.${cfg.keycloak-id}) host port;
+            endpoints.default = {
+              origin = {
+                inherit (outerCfg.myOpt.keycloak.${cfg.keycloak-id}) host port;
+              };
+              proxy = {
+                inherit (cfg) netns-id;
+              };
             };
             # endpoints.default.origin.ip-socket = outerCfg.myOpt.keycloak.${name}.unix-socket;
             set-cgroup-parent.systemd-services = [];

@@ -32,18 +32,25 @@ in {
           type = types.nullOr types.singleLineStr;
         };
         # unix-socket = mkOption {
-        #   type = types.strMatching "^/run/[^/]+/.*.sock$";
+        #   type = types.strMatching "^/run/[^/]+/.*\.sock$";
         #   default = "/run/${name}/keycloak/keycloak.sock";
+        # };
+        # host = mkOption {
+        #   type = types.singleLineStr;
+        #   default = outerCfg.containers.${cfg.container.name}.config.services.keycloak.http-host;
+        #   readOnly = true;
+        # };
+        # port = mkOption {
+        #   type = types.port;
+        #   default = outerCfg.containers.${cfg.container.name}.config.services.keycloak.http-port;
+        #   readOnly = true;
         # };
         host = mkOption {
           type = types.singleLineStr;
-          default = outerCfg.containers.${cfg.container.name}.config.services.keycloak.http-host;
-          readOnly = true;
+          default = "::1";
         };
         port = mkOption {
           type = types.port;
-          default = outerCfg.containers.${cfg.container.name}.config.services.keycloak.http-port;
-          readOnly = true;
         };
       };
     }));
@@ -87,8 +94,11 @@ in {
                   inherit (cfg.modules.services.keycloak.database) type host createLocally;
                 };
                 settings = {
-                  inherit (cfg.modules.services.keycloak.settings) hostname http-port;
-                  http-host = mkDefault "::1";
+                  inherit (cfg.modules.services.keycloak.settings) hostname;
+                  # inherit (cfg.modules.services.keycloak.settings) hostname http-port;
+                  # http-host = mkDefault "::1";
+                  http-host = cfg.host;
+                  http-port = cfg.port;
                   http-enabled = mkDefault true;
                   proxy-headers = mkDefault "xforwarded";
                 };
@@ -141,14 +151,14 @@ in {
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.netns-id}.set-network-namespace = {
-          containers = [cfg.container.name];
+          nixos-containers = [cfg.container.name];
         };
       })
       (filterAttrs (_: cfg: cfg.netns-id != null) enabled));
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
-          containers = [cfg.container.name];
+          nixos-containers = [cfg.container.name];
         };
       })
       (filterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));

@@ -52,6 +52,24 @@ in {
             type = types.path;
           };
         };
+        proxy-compose-id = mkOption {
+          type = types.singleLineStr;
+          default = name;
+        };
+        sleep-on-idle-id = mkOption {
+          type = types.singleLineStr;
+          default = name;
+        };
+        proxy-compose-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id};
+          readOnly = true;
+        };
+        sleep-on-idle-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id};
+          readOnly = true;
+        };
       };
     }));
   };
@@ -63,9 +81,10 @@ in {
       enabled);
 
     myOpt.proxy-compose = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.oci-container.name} = mkMerge [
+        ${cfg.proxy-compose-id} = mkMerge [
           cfg.modules.proxy-compose
           {
+            inherit (cfg) sleep-on-idle-id;
             enable = true;
             modules.sleep-on-idle = {
               health-check.path = "/healthz/readiness";
@@ -98,8 +117,8 @@ in {
               then "2"
               else "1";
             N8N_PROTOCOL = "https";
-            N8N_HOST = cfg.proxy-compose.hostname;
-            WEBHOOK_URL = "https://${cfg.proxy-compose.hostname}/";
+            N8N_HOST = cfg.modules.proxy-compose.hostname;
+            WEBHOOK_URL = "https://${cfg.modules.proxy-compose.hostname}/";
             N8N_PORT = toString cfg.port;
             NODE_ENV = "production";
             GENERIC_TIMEZONE = outerCfg.time.timeZone;

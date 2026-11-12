@@ -19,7 +19,6 @@ in {
     default = {};
     type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
       cfg = innerArgs.config;
-      sleep-on-idle-cfg = outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id};
     in {
       options = {
         enable = mkOption {
@@ -64,14 +63,19 @@ in {
             readOnly = true;
           };
           unix-socket = mkOption {
-            type = types.strMatching "^/run/.+/.+$";
+            type = types.strMatching "^/run/.*\.sock$";
             default = "/run/proxy-compose/${name}/${name}.sock";
           };
         };
         caddy = {
+          mk-extraConfig = mkOption {
+            type = types.anything;
+            default = cfg: '''';
+          };
           extraConfig = mkOption {
             type = types.lines;
-            default = '''';
+            default = cfg.caddy.mk-extraConfig cfg;
+            readOnly = true;
           };
           add-encode = mkOption {
             type = types.bool;
@@ -82,17 +86,30 @@ in {
             default = true;
           };
           request_body.max_size = mkOption {
-            type = types.str;
+            type = types.singleLineStr;
             default = "16MiB";
           };
         };
         sleep-on-idle-id = mkOption {
-          type = types.anything;
-          default = name;
+          type = types.singleLineStr;
         };
-        default-caddy-origin-unix-socket = mkOption {
-          type = types.strMatching "^unix//run/.+[^/]$";
-          default = to-caddy-ip-socket sleep-on-idle-cfg.endpoints.default.proxy.ip-socket;
+        # sleep-on-idle.endpoints.default.proxy.ip-socket = mkOption {
+        #   type = types.singleLineStr;
+        #   default = "/run/sleep-on-idle/${cfg.sleep-on-idle-id}/${name}.sock";
+        # };
+        # default-caddy-origin-socket = mkOption {
+        #   type = types.strMatching "^unix//run/.*\.sock$";
+        #   default = to-caddy-ip-socket cfg.sleep-on-idle.endpoints.default.proxy.ip-socket;
+        #   readOnly = true;
+        # };
+        sleep-on-idle-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id};
+          readOnly = true;
+        };
+        default-caddy-origin-socket = mkOption {
+          type = types.strMatching "^unix//run/.*\.sock$";
+          default = to-caddy-ip-socket cfg.sleep-on-idle-cfg.endpoints.default.proxy.ip-socket;
           readOnly = true;
         };
       };
@@ -109,22 +126,30 @@ in {
       ])
       enabled);
 
-    myOpt.sleep-on-idle =
-      mapAttrs' (name: cfg: (nameValuePair cfg.sleep-on-idle-id (mkMerge [
-        cfg.modules.sleep-on-idle
-        {
-          enable = true;
-        }
-      ])))
-      enabled;
+    # myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
+    #     ${cfg.sleep-on-idle-id} = cfg.modules.sleep-on-idle;
+    #   })
+    #   enabled);
+
+    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.sleep-on-idle-id} = mkMerge [
+          cfg.modules.sleep-on-idle
+          {
+            enable = true;
+            # endpoints.default.proxy.ip-socket = {
+            #   inherit (cfg.sleep-on-idle.endpoints.default.proxy) ip-socket;
+            # };
+          }
+        ];
+      })
+      enabled);
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${builtins.dirOf cfg.cloudflared.unix-socket} 711 caddy caddy - -"
+        "d ${builtins.dirOf cfg.cloudflared.unix-socket} 0711 caddy caddy - -"
       ])
       enabled-cloudflared);
 
-    myOpt.cloudflared = mkMerge (
-      mapAttrsToList (name: cfg: {
+    myOpt.cloudflared = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.modules.cloudflared.tunnel-id} = mkMerge [
           cfg.modules.cloudflared
           {
@@ -135,12 +160,11 @@ in {
           }
         ];
       })
-      enabled-cloudflared
-    );
+      enabled-cloudflared);
 
     services.caddy = mkMerge (mapAttrsToList (
         _: cfg: let
-          inherit (cfg) localMode caddy cloudflared hostname default-caddy-origin-unix-socket;
+          inherit (cfg) localMode caddy cloudflared hostname default-caddy-origin-socket;
           inherit (cfg.caddy) add-handle-reverse-proxy add-encode request_body;
           extraConfig = ''
             ${caddy.extraConfig}
@@ -151,7 +175,7 @@ in {
               if add-handle-reverse-proxy
               then ''
                 handle {
-                  reverse_proxy ${default-caddy-origin-unix-socket}
+                  reverse_proxy ${default-caddy-origin-socket}
                 }
               ''
               else ''''

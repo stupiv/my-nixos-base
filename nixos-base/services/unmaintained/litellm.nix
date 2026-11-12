@@ -59,11 +59,11 @@ in {
           default = {};
         };
         environment = mkOption {
-          type = types.attrsOf types.str;
+          type = types.attrsOf types.singleLineStr;
           default = {};
         };
         environmentFile = mkOption {
-          type = types.nullOr types.str;
+          type = types.nullOr types.singleLineStr;
           default = null;
         };
       };

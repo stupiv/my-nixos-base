@@ -13,12 +13,12 @@ with lib; let
   cgi-fcgi = getExe pkgs.fcgi;
 in {
   config = mkIf (enabled != {}) {
-    systemd.services = concatMapAttrs (name1: cfg1: let
-      inherit (cfg1) sliceName freezeUnit health-check exit-idle-time TimeoutStartSec;
+    systemd.services = concatMapAttrs (_: cfg: let
+      inherit (cfg) sliceName freezeUnit health-check exit-idle-time TimeoutStartSec;
     in
       assert (health-check.ip-socket != null);
-        (mapAttrs' (name2: cfg2: let
-          inherit (cfg2) proxy origin;
+        (mapAttrs' (_: endpointCfg: let
+          inherit (endpointCfg) proxy origin;
           socketUnit = "${proxy.name}.socket";
         in (nameValuePair proxy.name {
           requires = [socketUnit freezeUnit];
@@ -40,7 +40,16 @@ in {
             ExecStart = "${systemd-socket-proxyd} --exit-idle-time=${toString exit-idle-time} ${origin.ip-socket}";
           };
         })))
-        cfg1.endpoints)
+        cfg.endpoints)
+    enabled;
+
+    myOpt.netns = concatMapAttrs (_: cfg:
+      (mapAttrs' (_: endpointCfg: (nameValuePair endpointCfg.proxy.netns-id {
+        set-network-namespace = {
+          systemd-services = [endpointCfg.proxy.name];
+        };
+      })))
+      (filterAttrs (_: endpointCfg: endpointCfg.proxy.netns-id != null) cfg.endpoints))
     enabled;
   };
 }

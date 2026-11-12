@@ -210,7 +210,7 @@ in {
                   root * ${containerCfg.services.wordpress.sites.${cfg.proxy-compose.hostname}.finalPackage}/share/wordpress
                   file_server
 
-                  php_fastcgi ${config.myOpt.proxy-compose.${cfg.serviceName}.default-caddy-origin-unix-socket}
+                  php_fastcgi ${config.myOpt.proxy-compose.${cfg.serviceName}.default-caddy-origin-socket}
 
                   @uploads-php {
                     path_regexp path /uploads/(?:.*)\.php
