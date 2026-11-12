@@ -1,107 +1,83 @@
-- This is the handover for `nixos-base/services/`.
-  - Snapshot
-    - The source snapshot is dated 2026-11-07 on branch `arena/a7026f5a-my-nixos-base` at commit `66ded62`, and it was not build-tested because the authoring sandbox had no `nix`.
-    - This file was reshaped into nested bullets on 2026-11-07 (branch `arena/056af839-my-nixos-base`, commit `c103788`) without re-verifying its claims.
-
-  - What this directory is for
-    - It holds every long-running workload in the repo.
-    - All of it is **opt-in**, because importing this directory declares options only and each service starts doing work the moment a host writes `myOpt.<service>.<name> = { … };`.
-    - `nixos-base/services/default.nix` imports the directories `./compose` and `./sleep-on-idle`.
-    - It also imports `./camofox.nix`, `./cloudflared.nix`, `./fastcrw.nix`, `./hermes-agent.nix`, `./keycloak.nix`, `./litellm.nix`, `./mariadb.nix`, `./netns.nix`, `./postgresql.nix`, `./proxy-compose.nix`, `./rclone-automount.nix`, `./searxng.nix`, `./squid.nix`, `./systemd-socket-proxyd.nix` and `./valkey.nix`.
-
-  - The five primitives (learn these first)
-    - Everything else is a composition of these, and they are worth reading in this order.
-    - Primitive 1 — `netns.nix`, network namespaces
-      - `myOpt.netns.<name>` creates a `netns-<name>.service` that runs `ip netns add <ns>` and brings `lo up`, using a hashed short name by default such as 7 hex chars of `sha256 name`.
-      - `set-network-namespace.systemd-services` applies `NetworkNamespacePath` plus `InaccessiblePaths = /run/nscd /run/resolvconf` and `bindsTo`/`after` the netns unit.
-      - `set-network-namespace.oci-containers` applies `networks = [ "ns:/run/netns/<ns>" ]`.
-      - `set-network-namespace.nixos-containers` applies `networkNamespace = /run/netns/<ns>`.
-      - The service itself is heavily sandboxed with only `CAP_NET_ADMIN` and `CAP_SYS_ADMIN`, plus `IPAddressDeny = "any"`, `MemoryDenyWriteExecute` and similar settings.
-      - The design intent is that an app which should not reach the network at all still gets a namespace with a loopback, and only explicitly proxied sockets leave it.
-      - Maintainer intent recorded on 2026-11-07 is that these namespaces are deliberately left with no DNS and no Internet reach.
-      - **G1 — previously latent in `camofox.nix`, `fastcrw.nix` and `litellm.nix`, now resolved.**
-        - Those three service modules previously copied a helper reading `entry.path`, `entry.resolvConf` and `entry.unit`, whereas `netns.nix` exposes `nsPath` and `serviceUnit`.
-        - They now omit direct `myOpt.netns` and `cgroup-parent` options and let compose modules wire `set-network-namespace` and `set-cgroup-parent`.
-    - Primitive 2 — `systemd-socket-proxyd.nix`, the TCP ↔ unix socket bridge
-      - `myOpt.systemd-socket-proxyd.<name>` takes `origin` for where to dial and `proxy` for where to listen.
-      - Both sides use `mkEndpointOpt` from [`../../myLib`](../../myLib/HANDOVER.md), with `origin` **unbracketed** and `proxy` **bracketed** because `listenStreams` needs `[::1]:8080`.
-      - It emits a `systemd-socket-proxyd@<name>.socket` drop-in with `wantedBy = sockets.target` plus a service drop-in whose `ExecStart` is the proxyd binary with the origin address and which `requires`/`after` the origin unit.
-      - The templated `systemd-socket-proxyd@` socket/service pair is declared once as an empty base.
-      - This is how a container that only speaks unix sockets gets exposed to Caddy/Cloudflared without opening a port.
-    - Primitive 3 — `sleep-on-idle/`, socket activation plus cgroup freeze
-      - It is documented in [`sleep-on-idle/HANDOVER.md`](sleep-on-idle/HANDOVER.md).
-      - In one sentence, a `sleep-on-idle-proxy@…` unit fronts a unix socket, runs a health check, then execs `systemd-socket-proxyd --exit-idle-time=…`, and the whole cgroup slice is frozen when the proxy exits.
-    - Primitive 4 — `squid.nix`, an egress proxy with an FQDN allowlist
-      - It runs `squid@<name>` in a `netns`, listening on `[origin.host]:origin.port` as loopback inside the namespace and reachable from outside via `systemd-socket-proxyd`.
-      - `HTTP(S)_PROXY` and `NO_PROXY` are then injected into the configured `set-env-vars.{systemd-services,oci-containers,nixos-containers}`.
-      - `egress-restriction.enable = true` is the default and writes Squid ACLs that only allow `CONNECT` to port 443 for `egress-restriction.fqdns`, denying everything else.
-      - `validateConfig = true` is the default and runs `squid -k parse` **at build time** via `runCommand`, so a bad config fails the build rather than the service.
-      - It sets `DynamicUser`, `CacheDirectory`, `LogsDirectory`, `ProtectSystem = strict`, `CapabilityBoundingSet = ""`, `MemoryDenyWriteExecute`, `NoExecPaths` and `UMask = 0077`, making it the most hardened unit in the repo.
-      - The `squid@` template has `ConditionPathExists = /etc/squid/%i.conf`, so instances exist as `/etc/squid/<name>.conf` written with `environment.etc` rather than per-instance unit duplication.
-    - Primitive 5 — `proxy-compose.nix`, the "publish this app" convenience layer
-      - `myOpt.proxy-compose.<name>` ties together a `sleep-on-idle` instance whose default id is the instance name, Caddy via `virtualHosts.<hostname>` or `http://<localMode.ip-socket>`, and optionally Cloudflared via `ingress.<hostname> = "unix:<socket>"`.
-      - **Invariant:** `localMode.enable` and `cloudflared.enable` are mutually exclusive, enforced by an `assertion`.
-      - `cloudflared.enable` is *read-only* and derived from `modules.cloudflared != {}`.
-      - `default-caddy-origin-unix-socket` is derived from the sleep-on-idle default endpoint and prefixed with `unix/` when it is a path, because that is Caddy's unix-socket syntax.
-      - `caddy.openFirewall` is only set when neither local mode nor cloudflared is on, since Cloudflared tunnels need no port.
-
-  - Service-by-service
-    - `camofox.nix` uses the `camofox` key and the `oci-containers` podman shape.
-      - It runs headless Firefox per instance with `--read-only`, `--cap-drop=ALL`, `--shm-size=2g` because the default 64 MB breaks Firefox, `--security-opt=no-new-privileges`, `--pids-limit=512`, `url` via `pkgs.myLib.bracketIpv6`, `modules.virtualisation.oci-containers.containers` pass-through, optional `envfile-key`/`sopsFile` and `environmentFiles`, and a telemetry flag mapped to `CAMOFOX_CRASH_REPORT_ENABLED`, leaving `netns` and `sleep-on-idle` wiring to compose modules.
-    - `fastcrw.nix` uses the `fastcrw` key with a templated systemd unit (`fastcrw@`).
-      - It defines a sandboxed `fastcrw@` template (`DynamicUser`, `User`/`Group = "fastcrw-%i"`, `ProtectSystem = "strict"`, syscall/capability lockdown) and per-instance `fastcrw@${name}` drop-ins (`overrideStrategy = "asDropin"`) taking an explicit `package` without a default, `url` via `pkgs.myLib.bracketIpv6`, optional `envfile-key`/`sopsFile` and `environmentFiles`, `modules.systemd.services` pass-through, and `autoStart = false` by default, leaving `netns` and `sleep-on-idle` wiring to compose modules.
-    - `hermes-agent.nix` uses the `hermes-agent` key and configures a **NixOS container** at `containers.${cfg.container.name}.config`.
-      - It declares `user`, `group`, `uid`, `gid`, `stateDir`, `port`, `host` (`"::1"`), read-only `unix-socket` (`"${cfg.container.shared-run-dir}/hermes-agent.sock"`), `extra-users`, `environment`, `environmentFiles`, `container`, `modules.services.hermes-agent` and `settings`.
-      - Its `settings` `apply` merges firecrawl backends, `browser.cloud_provider = "camofox"`, `display.busy_input_mode = "steer"`, `model = { default = ""; provider = "custom"; api_mode = ""; }`, `agent` defaults and `moa.presets.default.enabled = false`.
-      - Inside the container config, it imports `inputs.hermes-agent.nixosModules.default` and `./systemd-socket-proxyd.nix`, pins the matching UID/GID, bridges `cfg.unix-socket` to `backend.{host,port}` (`hermes-backend` or `hermes-agent`), merges `cfg.modules.services.hermes-agent` into `services.hermes-agent`, and applies `serviceHardening` (`ProtectHome = mkForce true`) to `hermes-agent` and `hermes-backend`.
-    - `litellm.nix` uses the `litellm` key and configures a **NixOS container** at `containers.${cfg.container.name}.config` following `keycloak.nix` and `hermes-agent.nix`.
-      - It declares `modules.services.litellm`, `container`, `stateDir`, `port`, `host` (`"::1"`), read-only `url` (`pkgs.myLib.bracketIpv6`), read-only `unix-socket` (`"${cfg.container.shared-run-dir}/litellm.sock"`), `telemetry`, `settings`, `environment`, and `environmentFile`.
-      - Inside the container config, it imports `./systemd-socket-proxyd.nix`, bridges `cfg.unix-socket` to `services.litellm.{host,port}` via `myOpt.systemd-socket-proxyd."${name}-litellm"` with `origin.serviceName = "litellm"`, merges `cfg.modules.services.litellm` into `services.litellm` with telemetry env vars, and hardens `systemd.services.litellm` (`ReadWritePaths = [cfg.stateDir]`, `ProtectSystem = "strict"`), leaving host container creation, `tmpfiles`, `sops`, `netns`, and `sleep-on-idle` to compose modules.
-    - `keycloak.nix` uses the `keycloak` key and a NixOS container.
-      - It runs Keycloak in an isolated container with a unix socket at `/run/<shared-run-dir>/keycloak.sock` via `systemd-socket-proxyd`.
-      - It forces `http-host = ::1`, `http-port = 25546` and `proxy-headers = xforwarded`, and passes database type, host and createLocally through from the module config.
-    - `valkey.nix` uses the `valkey` key and a NixOS container.
-      - It enables `services.redis` with a valkey package inside a container, where `modules.services.redis` and `container` are pass-through attr sets and the `container` must carry `name`.
-    - `mariadb.nix` uses the `mariadb` key and a NixOS container.
-      - It follows the same pattern for `services.mysql` with `dataDir = <container.stateDir>/mariadb`.
-    - `postgresql.nix` uses the `postgresql` key and a NixOS container.
-      - It follows the same pattern for `services.postgresql` plus a `tmpfiles` rule creating the state dir `0700 postgres postgres`.
-    - `searxng.nix` uses the `searxng` key and configures a **NixOS container** at `containers.${cfg.container.name}.config`.
-      - Following `postgresql.nix`, it declares `modules.services.searx` (`freeformType = types.anything`, `package`, `settings.server.port`) with no package default and `container`, and enables `services.searx` inside the container while stripping `_module`.
-    - `cloudflared.nix` uses the `cloudflared` key and tunnels.
-      - It creates one tunnel per `<name>`, takes credentials from sops via `sops.tunnel-credentials.{key,sopsFile}`, takes `ingress` from `tunnelCfg`, sets `default = "http_status:404"`, chooses `edgeIPVersion` from `myOpt.dnscrypt.ipv6.disable`, orders itself `requires`/`after` `dnscrypt-proxy.service`, and uses a restart policy with stepped backoff.
-    - `rclone-automount.nix` uses the `rclone.automount` key and the `fileSystems` plus `x-systemd.automount` shape.
-      - It creates one rclone mount per remote with defaults `vfs-cache-mode=full`, `vfs-cache-max-age=90d`, `vfs-cache-min-free-space=20G`, `uid`/`gid` from the admin user, and `allow_other`, `nofail`, `_netdev`.
-    - `squid.nix` uses the `squid` key with templated systemd plus netns, as described in primitive 4.
-    - `systemd-socket-proxyd.nix` uses the `systemd-socket-proxyd` key with templated systemd, as described in primitive 2.
-    - `netns.nix` uses the `netns` key with systemd plus containers, as described in primitive 1.
-    - The composed directories are [`compose/`](compose/HANDOVER.md) for containerised apps and [`sleep-on-idle/`](sleep-on-idle/HANDOVER.md).
-
-  - Shared idioms
-    - Every service module binds `outerCfg = config;` and computes `enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.<svc>;`.
-    - Service URLs now use `pkgs.myLib.bracketIpv6` instead of local `mkHttpUrl` duplicates, and `netns`/`sleep-on-idle` integration is handled by compose modules rather than `toSliceUnit` or `resolveNetns` helpers inside individual services.
-    - **sops naming contract:** modules and compose wrappers declare `sops.secrets."<instance>/<purpose>"` and never create the file, so missing keys in the host's sops file surface as "secret does not exist" at activation rather than at build time.
-
-  - Gotchas specific to this directory
-    - **`autoStart = false` is the norm** for containers such as `camofox`, `litellm`, `n8n`, `frappe` and `chatwoot`.
-      - A container that "is not running" is usually correct because it should be pulled up by `sleep-on-idle` or `systemd-socket-proxyd`, so check the socket unit before debugging the container.
-    - **`virtualisation.oci-containers.backend = "podman"` is set per-module** in files like `camofox.nix` and `frappe-compose.nix`, *not* globally, so a new oci-containers module must set it or the default `docker` backend will be requested and fail.
-    - **Instances are keyed by name and that name leaks into paths** including state dirs, `/run/netns/<hash>`, container names, slice names and sops keys, so renaming an instance orphans its state.
-    - **`types.anything` everywhere** means typos in `container` or `modules.services.*` pass evaluation of the *option* and only explode when the referenced attribute is forced, often deep in a `mkMerge`.
-    - **`litellm.nix` uses `ReadWritePaths = [stateDir]` with `ProtectSystem = "strict"`**, so a state dir outside the default `tmpfiles` rule needs its own `ReadWritePaths` or the container's service cannot write.
-    - **`rclone-automount` default `options.cache-dir` point at `.cache/rclone/myOpt.rclone.automount`**, where the *option path* was pasted into the directory name.
-      - **⚠ verify:** it is literally interpolated as a literal string, so the cache dir is named after the option rather than after the remote, which is almost certainly unintended.
-    - **G6 — `n8n-compose.nix` in `compose/` is WIP**, because it references `cfg.n8n.serviceName` and `cfg.proxy-compose.hostname`, neither of which is declared.
-
-  - How to add a service
-    - Copy the smallest similar module, using `fastcrw.nix` for templated native systemd units, `camofox.nix` for OCI containers, and `keycloak.nix`/`litellm.nix` for container-inner services with a socket.
-    - Declare `options.myOpt.<svc>` as `attrsOf (submodule ({name, ...}: { options = { enable = mkOption { default = true; }; … }; }))`.
-    - Build the config with `mkIf (enabled != {})` so the whole file disappears when nothing is declared.
-    - Decide the transport, preferring a unix socket via `systemd-socket-proxyd` and using `proxy-compose` when the app is published.
-    - Add sops keys as `<instance>/<purpose>` and never default a secret path.
-    - Create `./default.nix` plus a line in the import list, leaving the `# ./default.nix` marker convention intact.
-
-  - See also
-    - [`../HANDOVER.md`](../HANDOVER.md) covers the system-level modules the services depend on, such as `sops`, `nix` and `no-coredump`.
-    - [`../../HANDOVER.md`](../../HANDOVER.md) covers the global issues G1 and G6 and the task table.
-    - [`../../myLib/HANDOVER.md`](../../myLib/HANDOVER.md) covers `mkEndpointOpt` and the bracket helpers.
+1. `nixos-base/services/` provides opt-in workloads and reusable service primitives.
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../HANDOVER.md).
+    2. `default.nix` imports the service modules, [`compose/`](compose/HANDOVER.md), and [`sleep-on-idle/`](sleep-on-idle/HANDOVER.md).
+    3. Five primitives define most workload composition.
+        1. `netns.nix` creates isolated network namespaces through `myOpt.netns.<name>`.
+            1. Namespace units create a short hashed namespace name and bring up loopback.
+            2. `set-network-namespace.systemd-services` sets `NetworkNamespacePath`, hides resolver paths, and binds units to namespace lifetime.
+            3. OCI targets use `networks = ["ns:/run/netns/<ns>"]`, while NixOS containers use `networkNamespace`.
+            4. Namespace setup is sandboxed with administrative capabilities restricted to its task.
+            5. Maintainer intent explicitly excludes direct DNS and Internet access inside these namespaces.
+            6. **G1** is resolved for Camofox, Fastcrw, and LiteLLM by moving namespace and cgroup wiring into compose modules.
+            7. Old helpers expected `path`, `resolvConf`, and `unit` instead of the actual `nsPath` and `serviceUnit` options.
+        2. `systemd-socket-proxyd.nix` bridges listening sockets to origin endpoints.
+            1. Instances declare `origin` and `proxy` using [`mkEndpointOpt`](../../myLib/HANDOVER.md).
+            2. Origins use unbracketed endpoint syntax and listeners use bracketed IPv6.
+            3. Per-instance drop-ins extend the shared `systemd-socket-proxyd@` socket and service templates.
+            4. Socket units join `sockets.target`, while proxy services require and follow the origin service.
+        3. `sleep-on-idle/` combines socket activation, readiness checks, and slice freezing.
+            1. Its proxy runs `systemd-socket-proxyd --exit-idle-time` after the health check succeeds.
+            2. The [sleep-on-idle handover](sleep-on-idle/HANDOVER.md) explains the freeze and thaw lifecycle.
+        4. `squid.nix` provides allowlisted egress through isolated proxy instances.
+            1. Squid listens inside a namespace and is reached through socket proxies.
+            2. `set-env-vars` injects proxy environment variables into selected systemd, OCI, or NixOS-container targets.
+            3. Default egress restrictions permit only HTTPS CONNECT requests to configured FQDNs on port 443.
+            4. Default build-time validation runs `squid -k parse` and rejects invalid configuration.
+            5. Hardened `squid@` units use dynamic users, strict filesystem protection, restricted capabilities, and `UMask = 0077`.
+            6. Each template instance requires `/etc/squid/<name>.conf` generated through `environment.etc`.
+        5. `proxy-compose.nix` publishes an application through Caddy and sleep-on-idle.
+            1. Optional Cloudflared ingress targets a unix socket.
+            2. Local mode and Cloudflared mode are mutually exclusive by assertion.
+            3. Read-only `cloudflared.enable` derives from nonempty `modules.cloudflared`.
+            4. Caddy unix-socket origins receive the required `unix/` prefix.
+            5. Firewall opening applies only when neither local mode nor Cloudflared mode is selected.
+    4. Application modules expose instance-specific configuration.
+        1. `camofox.nix` runs headless Firefox in Podman with read-only storage, dropped capabilities, and no-new-privileges.
+            1. It reserves 2 GiB of shared memory and limits processes to 512.
+            2. Options include telemetry, socket-safe URLs, optional sops environment files, and OCI-container pass-throughs.
+        2. `fastcrw.nix` creates hardened `fastcrw@` native systemd units with per-instance drop-ins.
+            1. Instances require an explicit package and default to `autoStart = false`.
+            2. Options include environment files, sops integration, normalized URLs, and systemd-service pass-throughs.
+        3. `hermes-agent.nix` configures the agent inside an existing NixOS container.
+            1. Options cover identity, state, host and port, environment, settings, and `modules.services.hermes-agent`.
+            2. Its read-only unix socket defaults to `<shared-run-dir>/hermes-agent.sock`.
+            3. Settings merge Firecrawl backends, Camofox browser integration, `busy_input_mode = "steer"`, custom-provider model fields, and disabled default MoA.
+            4. Container configuration imports upstream Hermes and a socket bridge with matching UID/GID and service hardening.
+        4. `litellm.nix` configures LiteLLM inside an existing NixOS container.
+            1. Options cover service pass-throughs, container metadata, state, telemetry, settings, environment, and endpoint fields.
+            2. It bridges `<shared-run-dir>/litellm.sock` to `services.litellm` and computes a bracket-safe read-only URL.
+            3. Service hardening uses `ProtectSystem = "strict"` with `ReadWritePaths = [stateDir]`.
+            4. Compose modules own host containers, tmpfiles, sops, namespaces, and sleep-on-idle integration.
+        5. `keycloak.nix` runs Keycloak inside a NixOS container behind a unix-socket bridge.
+            1. It forces `http-host = ::1`, `http-port = 25546`, and `proxy-headers = xforwarded`.
+            2. Database type, host, and local-creation settings pass through from configuration.
+        6. `valkey.nix` enables `services.redis` with a Valkey package inside the named container.
+        7. `mariadb.nix` enables `services.mysql` with state under `<container.stateDir>/mariadb`.
+        8. `postgresql.nix` enables PostgreSQL and creates its state directory with mode `0700` and PostgreSQL ownership.
+        9. `searxng.nix` configures `services.searx` inside a NixOS container.
+            1. It requires a package, exposes `settings.server.port`, accepts freeform service configuration, and strips `_module`.
+        10. `cloudflared.nix` creates tunnels using sops credentials and configured ingress.
+            1. Tunnels default to `http_status:404`, depend on DNSCrypt, select edge IP version from DNS policy, and use stepped restart backoff.
+        11. `rclone-automount.nix` creates network filesystems using systemd automount.
+            1. Defaults include full VFS caching, a 90-day maximum cache age, 20 GiB minimum free space, and admin UID/GID.
+            2. Mount options include `allow_other`, `nofail`, and `_netdev`.
+    5. Shared idioms determine activation and persistence.
+        1. Service instances usually default to enabled and are filtered through `cfg.enable`.
+        2. Application URLs use `pkgs.myLib.bracketIpv6` rather than copied URL helpers.
+        3. Declare sops keys as `<instance>/<purpose>` and provision actual secrets downstream.
+        4. `autoStart = false` usually means the workload waits for socket activation rather than malfunctioning.
+        5. OCI modules must select the Podman backend explicitly.
+        6. Renaming instances can orphan state, sockets, namespace identifiers, and secret references.
+        7. Weakly typed pass-throughs defer many configuration errors until attributes are forced.
+        8. Custom LiteLLM state locations require compatible writable-path and directory rules.
+        9. **⚠ verify** rclone's literal `.cache/rclone/myOpt.rclone.automount` cache-directory default.
+        10. **G6** marks the unfinished n8n compose option reads.
+    6. Add new services by following the closest active implementation.
+        1. Use Fastcrw for native units, Camofox for OCI workloads, and Keycloak or LiteLLM for container-inner services.
+        2. Declare `myOpt.<service>` as instance submodules and guard generated configuration with `mkIf (enabled != {})`.
+        3. Prefer unix sockets and compose-owned namespace, cgroup, and publication wiring.
+        4. Register new modules in the existing `default.nix` import list without removing comment markers.
+    7. Read the related handovers for contracts outside this directory.
+        1. The [shared-system handover](../HANDOVER.md) covers sops and global system policy.
+        2. The [root handover](../../HANDOVER.md) records **G1**, **G6**, and maintenance entry points.
+        3. The [library handover](../../myLib/HANDOVER.md) describes endpoint and IPv6 helpers.
