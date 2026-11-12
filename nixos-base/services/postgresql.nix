@@ -17,50 +17,89 @@ in {
           type = types.bool;
           default = true;
         };
-        modules.services.postgresql = mkOption {
-          type = types.submodule ({...}:{
-            freeformType = types.anything;
-            options = {
-              package = mkOption {
-                type = types.anything;
-              };
-              settings.port = mkOption {
-                type = types.anything;
-              };
-            };
-          });
+        modules = {
+          services.postgresql = mkOption {
+            type = types.anything;
+            # type = types.submodule ({...}: {
+            #   freeformType = types.anything;
+            #   options = {
+            #     package = mkOption {
+            #       type = types.anything;
+            #     };
+            #     settings.port = mkOption {
+            #       type = types.anything;
+            #     };
+            #   };
+            # });
+          };
         };
-        container = mkOption {
-          type = types.submodule ({...}:{
-            freeformType = types.anything;
-            options = {};
-          });
+        # container = mkOption {
+        #   type = types.submodule ({...}: {
+        #     freeformType = types.anything;
+        #     options = {};
+        #   });
+        # };
+        # stateDir = mkOption {
+        #   type = types.anything;
+        #   default = "${cfg.container.stateDir}/postgresql";
+        #   readOnly = true;
+        # };
+        container.name = mkOption {
+          type = types.singleLineStr;
         };
         stateDir = mkOption {
-          type = types.anything;
-          default = "${cfg.container.stateDir}/postgresql";
-          readOnly = true;
+          type = types.singleLineStr;
+        };
+        sleep-on-idle-id = mkOption {
+          type = types.nullOr types.singleLineStr;
+        };
+        netns-id = mkOption {
+          type = types.nullOr types.singleLineStr;
         };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
+    systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
+        "d '${cfg.stateDir}' 0711 ${config.ids.uids.postgres} ${config.ids.gids.postgres} - -"
+      ])
+      enabled);
+
     containers = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.container.name}.config = {...}: {
-          systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-              "d '${cfg.stateDir}' 0700 postgres postgres - -"
-            ])
-            enabled);
-          services.postgresql = mkMerge [
-            cfg.modules.services.postgresql
-            {
-              enable = true;
-              dataDir = cfg.stateDir;
-            }
+        ${cfg.container.name} = {
+          extraFlags = [
+            "--bind=${cfg.stateDir}:${cfg.stateDir}:idmap"
           ];
+          config = {...}: {
+            services.postgresql = mkMerge [
+              cfg.modules.services.postgresql
+              {
+                enable = true;
+                package = mkDefault cfg.modules.services.postgresql.package;
+                dataDir = cfg.stateDir;
+                settings = {
+                  inherit (cfg.modules.services.postgresql.settings) port;
+                };
+              }
+            ];
+          };
         };
       })
       enabled);
+
+    myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.netns-id}.set-network-namespace = {
+          containers = [cfg.container.name];
+        };
+      })
+      (filterAttrs (_: cfg: cfg.netns-id != null) enabled));
+
+    myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
+          containers = [cfg.container.name];
+        };
+      })
+      (filterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
   };
 }

@@ -9,43 +9,39 @@ with lib; let
 in {
   options.myOpt.cloudflared = mkOption {
     default = {};
-    type = types.attrsOf (types.submodule ({
-        name,
-        config,
-        ...
-      } @ innerArgs: let
-        cfg = innerArgs.config;
-      in {
-        options = {
-          enable = mkOption {
-            type = types.bool;
-            default = true;
+    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
+      cfg = innerArgs.config;
+    in {
+      options = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+        tunnel-id = mkOption {
+          type = types.singleLineStr;
+        };
+        sops.credential = {
+          key = mkOption {
+            type = types.singleLineStr;
+            default = cfg.tunnel-id;
           };
-          tunnel-id = mkOption {
-            type = types.anything;
-          };
-          sops.tunnel-credentials = {
-            key = mkOption {
-              type = types.anything;
-              default = cfg.tunnel-id;
-            };
-            sopsFile = mkOption {
-              type = types.anything;
-            };
-          };
-          tunnelCfg = mkOption {
-            type = types.anything;
-            default = {};
+          sopsFile = mkOption {
+            type = types.path;
           };
         };
-      }));
+        tunnelCfg = mkOption {
+          type = types.anything;
+          default = {};
+        };
+      };
+    }));
   };
   config = mkIf (enabled != {}) {
     sops.secrets =
-      mapAttrs' (name: cfg: (nameValuePair cfg.sops.tunnel-credentials.key {
-        inherit (cfg.sops.tunnel-credentials) sopsFile;
+      mapAttrs' (name: cfg: (nameValuePair cfg.sops.credential.key {
+        inherit (cfg.sops.credential) sopsFile;
       }))
-      config.myOpt.cloudflared;
+      enabled;
 
     services.cloudflared.enable = true;
     services.cloudflared.tunnels =
@@ -57,11 +53,11 @@ in {
             if (config.myOpt.dnscrypt.ipv6.disable)
             then "4"
             else "6";
-          credentialsFile = config.sops.secrets.${cfg.sops.tunnel-credentials.key}.path;
+          credentialsFile = config.sops.secrets.${cfg.sops.credential.key}.path;
           default = "http_status:404";
         }
       ])))
-      config.myOpt.cloudflared;
+      enabled;
 
     systemd.services =
       mapAttrs' (name: cfg: (nameValuePair "cloudflared-tunnel-${cfg.tunnel-id}" {
@@ -78,6 +74,6 @@ in {
           RestartSec = "1";
         };
       }))
-      config.myOpt.cloudflared;
+      enabled;
   };
 }
