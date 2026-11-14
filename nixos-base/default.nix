@@ -8,6 +8,7 @@
     ./admin.nix
     ./bootloader.nix
     ./caddy.nix
+    ./cloudlfared.nix
     # ./default.nix
     ./dirs.nix
     ./firmware.nix
@@ -24,7 +25,6 @@
     ./sops.nix
     ./specialisation.nix
     ./time.nix
-    ./tlp.nix
     ./vmVariant.nix
     ./zramSwap.nix
   ];

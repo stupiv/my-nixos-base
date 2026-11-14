@@ -38,7 +38,6 @@ in {
   };
   config = mkIf (enabled != {}) {
     services.cloudflared.enable = true;
-    services.cloudflared.package = config.myPkgs.cloudflared;
 
     sops.secrets =
       mapAttrs' (name: cfg: (nameValuePair cfg.sops.credential.key {
