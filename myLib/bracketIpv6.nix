@@ -3,16 +3,24 @@
     (final: prev: {
       myLib = prev.myLib.overrideScope (ml-final: ml-prev:
         with prev.lib; {
-          bracketIpv6 = s: let
-            p = ml-final.splitLastColon s;
+          bracketIpv6 = original: let
+            socket = ml-final.splitLastColon original;
           in
-            if p.port == null
-            then s
-            else if hasPrefix "[" p.host && hasSuffix "]" p.host
-            then s
-            else if hasInfix ":" p.host
-            then "[${p.host}]:${p.port}"
-            else s;
+            # if hasInfix ":" socket.host && !(hasPrefix "[" socket.host) && !(hasSuffix "]" socket.host)
+            # then
+            #   (
+            #     if socket.port == null
+            #     then "[${socket.host}]"
+            #     else "[${socket.host}]:${socket.port}"
+            #   )
+            # else original;
+            if socket.port == null
+            then original
+            else if hasPrefix "[" socket.host && hasSuffix "]" socket.host
+            then original
+            else if hasInfix ":" socket.host
+            then "[${socket.host}]:${socket.port}"
+            else original;
         });
     })
   ];

@@ -17,6 +17,10 @@
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs-2605";
     };
+    home-manager-2611 = {
+      url = "github:nix-community/home-manager/master";
+      inputs.nixpkgs.follows = "nixpkgs-2611";
+    };
 
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
@@ -35,13 +39,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
-    zen-browser-flake = {
-      url = "github:0xc000022070/zen-browser-flake";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        home-manager.follows = "home-manager";
-      };
-    };
+    # zen-browser-flake = {
+    #   url = "github:0xc000022070/zen-browser-flake";
+    #   inputs = {
+    #     nixpkgs.follows = "nixpkgs";
+    #     home-manager.follows = "home-manager";
+    #   };
+    # };
     nixos-hardware = {
       url = "github:NixOS/nixos-hardware";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -55,10 +59,10 @@
       inputs.nixpkgs.follows = "nixpkgs-2611";
       inputs.flake-parts.follows = "flake-parts";
     };
-    hermes-official-plugins = {
-      url = "github:NousResearch/hermes-official-plugins";
-      flake = false;
-    }; # tmp
+    # hermes-official-plugins = {
+    #   url = "github:NousResearch/hermes-official-plugins";
+    #   flake = false;
+    # }; # tmp
   };
   outputs = inputs: (inputs.flake-parts.lib.mkFlake {inherit inputs;} {
     systems = ["x86_64-linux" "aarch64-linux"];

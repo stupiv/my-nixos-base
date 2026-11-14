@@ -64,7 +64,7 @@ in {
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: let
         inherit (outerCfg.ids) uids gids;
       in [
-        "d '${cfg.stateDir}' 0711 ${toString uids.postgres} ${toString gids.postgres} - -"
+        "d '${cfg.stateDir}' 0700 ${toString uids.postgres} ${toString gids.postgres} - -"
       ])
       enabled);
 

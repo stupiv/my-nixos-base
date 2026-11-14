@@ -49,7 +49,7 @@ in {
               proxy =
                 (mkEndpointOpt {
                   cfg = endPointArgs.config.proxy;
-                  default-ip-socket = "/run/sleep-on-idle/${cfg.sliceName}/${endPointArgs.name}.sock";
+                  default-ip-socket = "/run/${name}/sleep-on-idle/${cfg.sliceName}-${endPointArgs.name}.sock";
                   ipv6-brackets = true; # ListenStream=: brackets required
                 })
                 // {

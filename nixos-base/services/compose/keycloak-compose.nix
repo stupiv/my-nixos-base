@@ -32,18 +32,9 @@ in {
             default = {};
           };
         };
-        container = {
-          name = mkOption {
-            type = types.singleLineStr;
-            default = name;
-          };
-          # stateDir = mkOption {
-          #   type = types.singleLineStr;
-          # };
-          # shared-run-dir = mkOption {
-          #   type = types.singleLineStr;
-          #   default = "/run/keycloak-compose/${name}";
-          # };
+        container.name = mkOption {
+          type = types.singleLineStr;
+          default = name;
         };
         database.port = mkOption {
           type = types.port;
@@ -73,114 +64,147 @@ in {
     }));
   };
 
-  config = mkIf (enabled != {}) {
-    myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.netns-id}.set-network-namespace = {
-          # systemd-services = [
-          #   cfg.sleep-on-idle-cfg.endpoints.default.proxy.serviceName
-          # ];
-          systemd-services = [];
-          oci-containers = [];
-          nixos-containers = [cfg.container.name];
-        };
-      })
-      enabled);
+  config = mkIf (enabled != {}) (mkMerge [
+    (let
+      mk-unix-socket = name: "/run/${name}/keycloak/keycloak.sock";
+    in {
+      myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
+          ${cfg.netns-id}.enable = mkForce false;
+        })
+        enabled);
 
-    myOpt.proxy-compose = mapAttrs' (name: cfg:
-      nameValuePair cfg.proxy-compose-id (mkMerge [
-        cfg.modules.proxy-compose
-        {
-          inherit (cfg) sleep-on-idle-id;
-          enable = true;
-          modules.sleep-on-idle = {
-            health-check.path = "/";
+      myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
+          ${cfg.sleep-on-idle-id} = {
             endpoints.default = {
-              origin = {
-                inherit (outerCfg.myOpt.keycloak.${cfg.keycloak-id}) host port;
-              };
-              proxy = {
-                inherit (cfg) netns-id;
-              };
-            };
-            # endpoints.default.origin.ip-socket = outerCfg.myOpt.keycloak.${name}.unix-socket;
-            set-cgroup-parent.systemd-services = [];
-            set-cgroup-parent.oci-containers = [];
-            set-cgroup-parent.nixos-containers = [cfg.container.name];
-          };
-        }
-      ]))
-    enabled;
-
-    # systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-    #     "d '${cfg.container.stateDir}' 0711 root root - -"
-    #     "d '${cfg.container.shared-run-dir}' 0711 root root - -"
-    #   ])
-    #   enabled);
-
-    containers = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.container.name} = {
-          ephemeral = true;
-          autoStart = false;
-          privateUsers = "pick";
-          config.nixpkgs.pkgs = pkgs;
-          # privateNetwork = true;
-          # extraFlags = [
-          #   "--bind=${cfg.container.stateDir}:${cfg.container.stateDir}:idmap"
-          #   "--bind=${cfg.container.shared-run-dir}:${cfg.container.shared-run-dir}:rootidmap"
-          # ];
-        };
-      })
-      enabled);
-
-    myOpt.keycloak = mapAttrs' (name: cfg: let
-      inherit (outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}) localMode hostname;
-    in
-      nameValuePair cfg.keycloak-id (mkMerge [
-        cfg.modules.keycloak
-        {
-          inherit (cfg) sleep-on-idle-id netns-id;
-          enable = true;
-          container.name = cfg.container.name;
-          modules.services.keycloak = {
-            database = {
-              inherit (cfg.database) port;
-              type = "postgresql";
-              createLocally = false;
-              host = "/run/postgresql";
-            };
-            settings = {
-              hostname = (
-                if (localMode.enable)
-                then "http://${localMode.ip-socket}"
-                else "https://${hostname}"
-              );
+              origin.ip-socket = mk-unix-socket name;
             };
           };
-        }
-      ]))
-    enabled;
+        })
+        enabled);
 
-    myOpt.postgresql = mapAttrs' (name: cfg:
-      nameValuePair name (mkMerge [
-        cfg.modules.postgresql
-        {
-          inherit (cfg) sleep-on-idle-id netns-id;
-          enable = true;
-          container.name = cfg.container.name;
-          modules.services.postgresql = {
-            settings = {
-              inherit (cfg.database) port;
-            };
-            ensureDatabases = ["keycloak"];
-            ensureUsers = [
-              {
-                name = "keycloak";
-                ensureDBOwnership = true;
-              }
+      systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
+          "d '${builtins.dirOf (mk-unix-socket name)}' 0711 root root - -"
+        ])
+        enabled);
+
+      containers = mkMerge (mapAttrsToList (name: cfg: {
+          ${cfg.container.name} = {
+            extraFlags = [
+              "--bind=${builtins.dirOf (mk-unix-socket name)}:${builtins.dirOf (mk-unix-socket name)}:rootidmap"
             ];
+            privateNetwork = mkForce true;
+            config = {config, ...} @ containerArgs: let
+              containerCfg = containerArgs.config;
+            in {
+              imports = [
+                ../systemd-socket-proxyd.nix
+              ];
+              myOpt.systemd-socket-proxyd."keycloak-proxy-${name}" = {
+                origin = {
+                  host = containerCfg.services.keycloak.settings.http-host;
+                  port = containerCfg.services.keycloak.settings.http-port;
+                  serviceName = "keycloak";
+                };
+                proxy.ip-socket = mk-unix-socket name;
+              };
+            };
           };
-        }
-      ]))
-    enabled;
-  };
+        })
+        enabled);
+    }) # See https://github.com/systemd/systemd/pull/41838
+    {
+      myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
+          ${cfg.netns-id} = {
+            enable = true;
+            set-network-namespace = {
+              systemd-services = [];
+              oci-containers = [];
+              nixos-containers = [cfg.container.name];
+            };
+          };
+        })
+        enabled);
+
+      myOpt.proxy-compose = mapAttrs' (name: cfg:
+        nameValuePair cfg.proxy-compose-id (mkMerge [
+          cfg.modules.proxy-compose
+          {
+            enable = true;
+            inherit (cfg) sleep-on-idle-id;
+            modules.sleep-on-idle = {
+              health-check.path = "/";
+              endpoints.default = {
+                origin = {
+                  inherit (outerCfg.myOpt.keycloak.${cfg.keycloak-id}) host port;
+                };
+                proxy = {
+                  inherit (cfg) netns-id;
+                };
+              };
+              set-cgroup-parent.systemd-services = [];
+              set-cgroup-parent.oci-containers = [];
+              set-cgroup-parent.nixos-containers = [cfg.container.name];
+            };
+          }
+        ]))
+      enabled;
+
+      containers = mkMerge (mapAttrsToList (name: cfg: {
+          ${cfg.container.name} = {
+            ephemeral = true;
+            autoStart = false;
+            privateUsers = "pick";
+            privateNetwork = false;
+            config.nixpkgs.pkgs = pkgs;
+          };
+        })
+        enabled);
+
+      myOpt.keycloak = mkMerge (mapAttrsToList (name: cfg: {
+          ${cfg.keycloak-id} = mkMerge [
+            cfg.modules.keycloak
+            {
+              enable = true;
+              inherit (cfg) sleep-on-idle-id netns-id;
+              container.name = cfg.container.name;
+              modules.services.keycloak = {
+                database = {
+                  inherit (cfg.database) port;
+                  type = "postgresql";
+                  createLocally = false;
+                  host = "/run/postgresql";
+                };
+                settings = {
+                  hostname = "https://${cfg.modules.proxy-compose.hostname}";
+                };
+              };
+            }
+          ];
+        })
+        enabled);
+
+      myOpt.postgresql = mapAttrs' (name: cfg:
+        nameValuePair name (mkMerge [
+          cfg.modules.postgresql
+          {
+            enable = true;
+            inherit (cfg) sleep-on-idle-id netns-id;
+            container.name = cfg.container.name;
+            modules.services.postgresql = {
+              settings = {
+                inherit (cfg.database) port;
+              };
+              ensureDatabases = ["keycloak"];
+              ensureUsers = [
+                {
+                  name = "keycloak";
+                  ensureDBOwnership = true;
+                }
+              ];
+            };
+          }
+        ]))
+      enabled;
+    }
+  ]);
 }

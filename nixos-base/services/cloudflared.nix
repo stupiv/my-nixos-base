@@ -37,13 +37,15 @@ in {
     }));
   };
   config = mkIf (enabled != {}) {
+    services.cloudflared.enable = true;
+    services.cloudflared.package = config.myPkgs.cloudflared;
+
     sops.secrets =
       mapAttrs' (name: cfg: (nameValuePair cfg.sops.credential.key {
         inherit (cfg.sops.credential) sopsFile;
       }))
       enabled;
 
-    services.cloudflared.enable = true;
     services.cloudflared.tunnels =
       mapAttrs' (name: cfg: (nameValuePair cfg.tunnel-id (mkMerge [
         cfg.tunnelCfg

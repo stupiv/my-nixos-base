@@ -12,6 +12,8 @@
     ./dirs.nix
     ./firmware.nix
     ./ipv6.nix
+    ./myC.nix
+    ./myPkgs.nix
     ./networkmanager.nix
     ./nix.nix
     ./nix-ld.nix

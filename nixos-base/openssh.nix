@@ -10,6 +10,11 @@ in {
     enable = mkOption {
       type = types.bool;
     };
+    modules = {
+      cloudflared = mkOption {
+        type = types.anything;
+      };
+    };
     port = mkOption {
       type = types.nullOr types.port;
       default = null;
@@ -17,11 +22,6 @@ in {
     cloudflared = {
       enable = mkOption {
         type = types.bool;
-        default = cfg.cloudflared.tunnel-id != null;
-        readOnly = true;
-      };
-      tunnel-id = mkOption {
-        type = types.nullOr types.singleLineStr;
       };
       hostname = mkOption {
         type = types.singleLineStr;
@@ -36,11 +36,14 @@ in {
         ports = [cfg.port];
       };
       myOpt.cloudflared = (mkIf cfg.cloudflared.enable) {
-        ${cfg.cloudflared.tunnel-id} = {
-          tunnelCfg.ingress = {
-            ${cfg.cloudflared.hostname} = "ssh://localhost:${toString cfg.port}";
-          };
-        };
+        ${cfg.modules.cloudflared.tunnel-id} = mkMerge [
+          cfg.modules.cloudflared
+          {
+            tunnelCfg.ingress = {
+              ${cfg.cloudflared.hostname} = "ssh://localhost:${toString cfg.port}";
+            };
+          }
+        ];
       };
     })
     {

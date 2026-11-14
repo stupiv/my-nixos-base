@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
@@ -33,7 +34,8 @@ in {
         };
         host = mkOption {
           type = types.singleLineStr;
-          default = "::1";
+          default = "127.0.0.1";
+          readOnly = true;
         };
         port = mkOption {
           type = types.port;
@@ -84,8 +86,8 @@ in {
         ${cfg.proxy-compose-id} = mkMerge [
           cfg.modules.proxy-compose
           {
-            inherit (cfg) sleep-on-idle-id;
             enable = true;
+            inherit (cfg) sleep-on-idle-id;
             modules.sleep-on-idle = {
               health-check.path = "/healthz/readiness";
               endpoints.default.origin = {inherit (cfg) host port;};
@@ -99,8 +101,8 @@ in {
       enabled);
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${cfg._home_node_dotn8n} 711 1000 1000 - -"
-        "d ${cfg._home_node_dotn8n-files} 711 1000 1000 - -"
+        "d ${cfg._home_node_dotn8n} 0711 1000 1000 - -"
+        "d ${cfg._home_node_dotn8n-files} 0711 1000 1000 - -"
       ])
       enabled);
 
@@ -112,10 +114,10 @@ in {
             outerCfg.sops.secrets.${cfg.sops.dotenv.key}.path
           ];
           environment = {
-            N8N_PROXY_HOPS =
-              if cfg.modules.proxy-compose ? cloudflared
-              then "2"
-              else "1";
+            N8N_PROXY_HOPS = toString (pkgs.myLib.countTrue [
+              (cfg.modules.proxy-compose ? cloudflared)
+              (cfg.modules.proxy-compose ? caddy)
+            ]);
             N8N_PROTOCOL = "https";
             N8N_HOST = cfg.modules.proxy-compose.hostname;
             WEBHOOK_URL = "https://${cfg.modules.proxy-compose.hostname}/";
@@ -123,12 +125,22 @@ in {
             NODE_ENV = "production";
             GENERIC_TIMEZONE = outerCfg.time.timeZone;
             TZ = outerCfg.time.timeZone;
+            N8N_VERSION_NOTIFICATIONS_ENABLED = "false";
+            N8N_TEMPLATES_ENABLED = "false";
+            N8N_LISTEN_ADDRESS = cfg.host;
           };
           volumes = [
             "${cfg._home_node_dotn8n}:${in-container_home_node_dotn8n}"
             "${cfg._home_node_dotn8n-files}:${in-container_home_node_dotn8n-files}"
           ];
-          ports = ["${cfg.host}:${toString cfg.port}:${toString cfg.port}"];
+          extraOptions = ["--network=host"];
+          # ports = let
+          #   HOST =
+          #     if hasInfix ":" cfg.host
+          #     then "[${cfg.host}]"
+          #     else cfg.host;
+          #   PORT = toString cfg.port;
+          # in ["${HOST}:${PORT}:${PORT}"];
         };
       })
       enabled);

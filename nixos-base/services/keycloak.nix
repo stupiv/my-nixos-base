@@ -31,20 +31,6 @@ in {
         netns-id = mkOption {
           type = types.nullOr types.singleLineStr;
         };
-        # unix-socket = mkOption {
-        #   type = types.strMatching "^/run/[^/]+/.*\.sock$";
-        #   default = "/run/${name}/keycloak/keycloak.sock";
-        # };
-        # host = mkOption {
-        #   type = types.singleLineStr;
-        #   default = outerCfg.containers.${cfg.container.name}.config.services.keycloak.http-host;
-        #   readOnly = true;
-        # };
-        # port = mkOption {
-        #   type = types.port;
-        #   default = outerCfg.containers.${cfg.container.name}.config.services.keycloak.http-port;
-        #   readOnly = true;
-        # };
         host = mkOption {
           type = types.singleLineStr;
           default = "::1";
@@ -57,30 +43,11 @@ in {
   };
 
   config = mkIf (enabled != {}) {
-    # systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-    #     "d '${builtins.dirOf cfg.unix-socket}' 0711 root root - -"
-    #   ])
-    #   enabled);
-
     containers = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.container.name} = {
-          # extraFlags = [
-          #   "--bind=${builtins.dirOf cfg.unix-socket}:${builtins.dirOf cfg.unix-socket}:rootidmap"
-          # ];
           config = {config, ...} @ innerArgs: let
             innerCfg = innerArgs.config;
           in {
-            # imports = [
-            #   ./systemd-socket-proxyd.nix
-            # ];
-            # myOpt.systemd-socket-proxyd."keycloak-proxy-${name}" = {
-            #   origin = {
-            #     host = innerCfg.services.keycloak.settings.http-host;
-            #     port = innerCfg.services.keycloak.settings.http-port;
-            #     serviceName = "keycloak";
-            #   };
-            #   proxy.ip-socket = cfg.unix-socket;
-            # };
             services.keycloak = mkMerge [
               cfg.modules.services.keycloak
               {

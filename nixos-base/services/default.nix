@@ -2,6 +2,7 @@
   imports = [
     ./compose
     ./sleep-on-idle
+    ./caddy.nix
     ./cloudflared.nix
     # ./default.nix
     ./fastcrw.nix
