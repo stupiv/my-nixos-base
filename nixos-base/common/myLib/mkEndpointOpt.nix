@@ -1,4 +1,8 @@
 {
+  imports = [
+    ./bracketIpv6.nix
+    ./unbracketIpv6.nix
+  ];
   nixpkgs.overlays = [
     (final: prev: {
       myLib = prev.myLib.overrideScope (ml-final: ml-prev: {

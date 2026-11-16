@@ -6,20 +6,17 @@
   ...
 }:
 with lib; let
+  outerCfg = config;
+  enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.systemd-socket-proxyd;
   inherit (pkgs.myLib) mkEndpointOpt;
-  enabled = filterAttrs (_: cfg: cfg.enable) config.myOpt.systemd-socket-proxyd;
 in {
   imports = [
-    ../../myLib
+    (outerCfg.myC.my-nixos-base-root + /nixos-base/common/myLib/mkEndpointOpt.nix)
   ];
   options.myOpt.systemd-socket-proxyd = mkOption {
     default = {};
-    type = types.attrsOf (types.submodule ({
-      name,
-      config,
-      ...
-    }: let
-      cfg = config;
+    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
+      cfg = innerArgs.config;
     in {
       options = {
         enable = mkOption {
@@ -61,7 +58,7 @@ in {
     systemd.services = mkMerge (mapAttrsToList (_: cfg: let
         originUnit = "${cfg.origin.serviceName}.service";
         socketUnit = "${cfg.proxy.serviceName}.socket";
-        systemd-socket-proxyd = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd";
+        systemd-socket-proxyd = "${outerCfg.systemd.package}/lib/systemd/systemd-socket-proxyd";
       in {
         ${cfg.proxy.serviceName} = {
           requires = [socketUnit originUnit];

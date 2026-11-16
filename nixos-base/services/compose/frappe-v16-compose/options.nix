@@ -32,9 +32,8 @@ in {
           default = name;
         };
         sleep-on-idle-id = mkOption {
-          type = types.anything;
-          default = outerCfg.myOpt.proxy-compose.${cfg.proxy-compose-id}.sleep-on-idle-id;
-          readOnly = true;
+          type = types.singleLineStr;
+          default = name;
         };
         netns-id = mkOption {
           type = types.anything;

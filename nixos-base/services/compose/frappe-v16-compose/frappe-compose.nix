@@ -77,9 +77,7 @@ in {
           enable = true;
           set-network-namespace = {
             oci-containers = mk-container-names cfg;
-            systemd-services = [
-              outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id}.endpoints.default.proxy.name
-            ];
+            systemd-services = [];
             nixos-containers = [];
           };
         };
@@ -110,12 +108,16 @@ in {
         cfg.modules.proxy-compose
         {
           enable = true;
+          inherit (cfg) sleep-on-idle-id;
           modules = {
             sleep-on-idle = {
               health-check.path = "/api/method/ping";
-              endpoints.default.origin = {
-                host = "127.0.0.1";
-                port = 8080;
+              endpoints.default = {
+                origin = {
+                  host = "127.0.0.1";
+                  port = 8080;
+                };
+                proxy = {inherit (cfg) netns-id;};
               };
               set-cgroup-parent.systemd-services = with cfg.frappe; [
                 build.serviceName
