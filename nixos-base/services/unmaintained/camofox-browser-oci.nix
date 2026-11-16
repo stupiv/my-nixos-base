@@ -61,7 +61,7 @@ in {
         oci-container.name = mkOption {
           type = types.anything;
         };
-        sops.dotenv = {
+        sops.envFile = {
           key = mkOption {
             type = types.anything;
           };
@@ -85,8 +85,8 @@ in {
 
   config = mkIf (enabled != {}) {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.sops.dotenv.key} = {
-          inherit (cfg.sops.dotenv) sopsFile;
+        ${cfg.sops.envFile.key} = {
+          inherit (cfg.sops.envFile) sopsFile;
           # restartUnits = [];
         };
       })
@@ -103,8 +103,7 @@ in {
           {
             inherit (cfg.modules.virtualisation.oci-containers.containers) image;
             autoStart = false;
-            environmentFiles = [outerCfg.sops.secrets.${cfg.sops.dotenv.key}.path];
-            # volumes = ["${cfg.uboDir}:/root/.cache/camoufox/addons/UBO"];
+            environmentFiles = [outerCfg.sops.secrets.${cfg.sops.envFile.key}.path];
             environment = {
               CAMOFOX_DISABLE_DEFAULT_ADDONS = "1";
             };

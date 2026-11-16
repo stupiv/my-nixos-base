@@ -163,7 +163,6 @@ in {
           };
           envFile-key = mkOption {
             type = types.singleLineStr;
-            default = "${name}/frappe_envFile";
             # INIT_ADMIN_PASSWORD=
             # DB_PASSWORD=
           };
@@ -179,7 +178,6 @@ in {
           };
           envFile-key = mkOption {
             type = types.singleLineStr;
-            default = "${name}/mariadb_envFile";
             # MARIADB_ROOT_PASSWORD=
           };
           containerName = mkOption {

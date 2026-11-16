@@ -11,7 +11,7 @@ with lib; let
   inherit (pkgs.myLib) mkEndpointOpt;
 in {
   imports = [
-    (outerCfg.myC.my-nixos-base-root + /nixos-base/common/myLib/mkEndpointOpt.nix)
+    ../common/myLib/mkEndpointOpt.nix
   ];
   options.myOpt.systemd-socket-proxyd = mkOption {
     default = {};

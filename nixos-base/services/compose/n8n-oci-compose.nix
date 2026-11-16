@@ -46,7 +46,7 @@ in {
         _home_node_dotn8n-files = mkOption {
           type = types.singleLineStr;
         };
-        sops.dotenv = {
+        sops.envFile = {
           key = mkOption {
             type = types.singleLineStr;
           };
@@ -78,7 +78,7 @@ in {
 
   config = {
     sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.sops.dotenv.key} = {inherit (cfg.sops.dotenv) sopsFile;};
+        ${cfg.sops.envFile.key} = {inherit (cfg.sops.envFile) sopsFile;};
       })
       enabled);
 
@@ -111,7 +111,7 @@ in {
           inherit (cfg.modules.virtualisation.oci-containers.containers) image;
           autoStart = false;
           environmentFiles = [
-            outerCfg.sops.secrets.${cfg.sops.dotenv.key}.path
+            outerCfg.sops.secrets.${cfg.sops.envFile.key}.path
           ];
           environment = {
             N8N_PROXY_HOPS = toString (pkgs.myLib.countTrue [

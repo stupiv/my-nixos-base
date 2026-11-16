@@ -60,7 +60,7 @@ in {
         netns-id = mkOption {
           type = types.nullOr types.singleLineStr;
         };
-        sops.dotenv = {
+        sops.envFile = {
           key = mkOption {
             type = types.singleLineStr;
           };
@@ -69,7 +69,7 @@ in {
           };
           path = mkOption {
             type = types.strMatching "^/run/.*[^/]$";
-            default = outerCfg.sops.secrets.${cfg.sops.dotenv.key}.path;
+            default = outerCfg.sops.secrets.${cfg.sops.envFile.key}.path;
             readOnly = true;
           };
         };
@@ -83,8 +83,8 @@ in {
   config = mkIf (enabled != {}) {
     sops.useTmpfs = true;
     sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.sops.dotenv.key} = {
-          inherit (cfg.sops.dotenv) sopsFile;
+        ${cfg.sops.envFile.key} = {
+          inherit (cfg.sops.envFile) sopsFile;
           restartUnits = ["container@${name}.service"];
         };
       })
@@ -101,7 +101,7 @@ in {
           {
             extraFlags = [
               "--bind=${cfg.stateDir}:${cfg.stateDir}:idmap"
-              "--bind-ro=${cfg.sops.dotenv.path}:${cfg.sops.dotenv.path}:rootidmap"
+              "--bind-ro=${cfg.sops.envFile.path}:${cfg.sops.envFile.path}:rootidmap"
             ];
             config = {...}: {
               imports = [
@@ -119,7 +119,7 @@ in {
                   enable = true;
                   inherit (cfg) stateDir;
                   package = mkDefault cfg.modules.services.hermes-agent.package;
-                  environmentFiles = [cfg.sops.dotenv.path];
+                  environmentFiles = [cfg.sops.envFile.path];
                   backend = {
                     inherit (cfg.modules.services.hermes-agent.backend) port;
                     host = mkDefault "::1";

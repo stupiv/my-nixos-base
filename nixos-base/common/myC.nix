@@ -1,16 +1,6 @@
-{
-  config,
-  lib,
-  pkgs,
-  inputs,
-  ...
-}:
-with lib; let
-in {
+{lib, ...}:
+with lib; {
   options.myC = mkOption {
     type = types.anything;
-  };
-  config.myC = {
-    my-nixos-base-root = inputs.out;
   };
 }
