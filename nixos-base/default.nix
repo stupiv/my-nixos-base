@@ -1,7 +1,6 @@
 {
   imports = [
-    ../myLib
-    ../myPkgs
+    ./common
     ./dnscrypt
     ./services
     ./terminal
@@ -13,8 +12,6 @@
     ./dirs.nix
     ./firmware.nix
     ./ipv6.nix
-    ./myC.nix
-    ./myPkgs.nix
     ./networkmanager.nix
     ./nix.nix
     ./nix-ld.nix

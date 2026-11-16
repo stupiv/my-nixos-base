@@ -15,6 +15,7 @@
     ./nixos_ozone_wl.nix
     ./plasma6.nix
     ./sound.nix
+    ./steam.nix
     ./tlp.nix
     ./tmpfs.nix
     ./vi-ime.nix

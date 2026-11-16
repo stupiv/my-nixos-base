@@ -19,7 +19,7 @@ in {
     # See https://linrunner.de/tlp/faq/conflicts.html
     services.power-profiles-daemon.enable = mkIf (cfg.enable) false;
     services.thermald.enable = mkIf (cfg.enable) false;
-    services.powerManagement.powertop.enable = mkIf (cfg.enable) false;
+    powerManagement.powertop.enable = mkIf (cfg.enable) false;
     services.auto-cpufreq.enable = mkIf (cfg.enable) false;
     hardware.system76.power-daemon.enable = mkIf (cfg.enable) false;
     services.throttled.enable = mkIf (cfg.enable) false;
