@@ -39,14 +39,12 @@ in {
         port = mkOption {
           type = types.port;
         };
-        stateDir = mkOption {
-          type = types.singleLineStr;
+        StateDirectory = mkOption {
+          type = types.addCheck (types.strMatching "^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$") (s: s != "private" && !(hasPrefix "private/" s));
         };
-        cacheDir = mkOption {
-          type = types.singleLineStr;
-        };
-        runtimeDir = mkOption {
-          type = types.singleLineStr;
+        RuntimeDirectory = mkOption {
+          type = types.strMatching "^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$";
+          default = "camofox-browser-${name}";
         };
         sops.envFile = {
           key = mkOption {
@@ -84,46 +82,43 @@ in {
       })
       enabled);
 
-    systemd.services = mapAttrs' (_: cfg:
-      nameValuePair cfg.serviceName {
-        environment = {
-          CAMOFOX_HOST = cfg.host;
-          CAMOFOX_PORT = toString cfg.port;
-          CAMOUFOX_EXECUTABLE = getExe cfg.camoufox.package;
-          CAMOFOX_ALLOW_PRIVATE_NETWORK = "false";
-          NODE_ENV = "production";
-          HOME = "%S/${cfg.stateDir}";
-          XDG_CACHE_HOME = "%C/${cfg.cacheDir}";
-          XDG_RUNTIME_DIR = "%t/${cfg.runtimeDir}";
-        };
-        serviceConfig = {
-          Type = "exec";
-          ExecStart = "${getExe cfg.package} serve";
-          EnvironmentFile = [cfg.sops.envFile.path];
-          Restart = "on-failure";
-          KillMode = "mixed";
-          DynamicUser = true;
-          WorkingDirectory = "%S/${cfg.stateDir}";
-          StateDirectory = cfg.stateDir;
-          StateDirectoryMode = "0700";
-          CacheDirectory = cfg.cacheDir;
-          CacheDirectoryMode = "0700";
-          RuntimeDirectory = cfg.runtimeDir;
-          RuntimeDirectoryMode = "0700";
-          UMask = "0077";
-          NoNewPrivileges = true;
-          PrivateTmp = true;
-          PrivateDevices = true;
-          ProtectSystem = "strict";
-          ProtectHome = true;
-          ProtectKernelTunables = true;
-          ProtectKernelModules = true;
-          ProtectControlGroups = true;
-          CapabilityBoundingSet = "";
-          LimitCORE = 0;
+    systemd.services = mkMerge (mapAttrsToList (name: cfg: {
+        ${cfg.serviceName} = {
+          environment = {
+            CAMOFOX_HOST = cfg.host;
+            CAMOFOX_PORT = toString cfg.port;
+            CAMOUFOX_EXECUTABLE = getExe cfg.camoufox.package;
+            NODE_ENV = "production";
+            HOME = "%S/${cfg.StateDirectory}";
+            XDG_RUNTIME_DIR = "%t/${cfg.RuntimeDirectory}";
+          };
+          serviceConfig = {
+            Type = "exec";
+            ExecStart = "${getExe pkgs.bash} -c 'set -a; . \"$CREDENTIALS_DIRECTORY/env\"; exec ${getExe cfg.package} serve'";
+            LoadCredential = "env:${cfg.sops.envFile.path}";
+            Restart = "on-failure";
+            KillMode = "mixed";
+            DynamicUser = true;
+            WorkingDirectory = "%S/${cfg.StateDirectory}";
+            StateDirectory = cfg.StateDirectory;
+            StateDirectoryMode = "0700";
+            RuntimeDirectory = cfg.RuntimeDirectory;
+            RuntimeDirectoryMode = "0700";
+            UMask = "0077";
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            PrivateDevices = true;
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            ProtectKernelTunables = true;
+            ProtectKernelModules = true;
+            ProtectControlGroups = true;
+            CapabilityBoundingSet = "";
+            LimitCORE = 0;
+          };
         };
       })
-    enabled;
+      enabled);
 
     myOpt.netns = mkMerge (mapAttrsToList (_: cfg: {
         ${cfg.netns-id}.set-network-namespace.systemd-services = [cfg.serviceName];
