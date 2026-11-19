@@ -78,12 +78,23 @@ in {
           default = outerCfg.myOpt.camofox-browser-compose.${cfg.camofox-browser-compose-id};
           readOnly = true;
         };
-        camofox-browser = {
-          enable = mkOption {
-            type = types.bool;
-            default = cfg.camofox-browser-compose-id != null;
-            readOnly = true;
-          };
+        camofox-browser.enable = mkOption {
+          type = types.bool;
+          default = cfg.camofox-browser-compose-id != null;
+          readOnly = true;
+        };
+        cdp-compose-id = mkOption {
+          type = types.nullOr types.singleLineStr;
+        };
+        cdp-compose-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.cdp-compose.${cfg.cdp-compose-id};
+          readOnly = true;
+        };
+        cdp.enable = mkOption {
+          type = types.bool;
+          default = cfg.cdp-compose-id != null;
+          readOnly = true;
         };
         sops.envFile = {
           key = mkOption {
@@ -111,6 +122,10 @@ in {
         {
           assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-compose-cfg.netns-id);
           message = "assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-compose-cfg.netns-id);";
+        }
+        {
+          assertion = !cfg.cdp.enable || (cfg.netns-id == cfg.cdp-compose-cfg.netns-id);
+          message = "assertion = !cfg.cdp.enable || (cfg.netns-id == cfg.cdp-compose-cfg.netns-id);";
         }
       ])
       enabled);
@@ -156,10 +171,15 @@ in {
                     plugins.enabled = ["camofox"];
                   };
                   environment = {
-                    inherit (cfg.camofox-browser-compose-cfg) CAMOFOX_URL;
+                    CAMOFOX_URL = cfg.camofox-browser-compose-cfg.url;
                   };
                 })
-                (optionalAttrs (!cfg.camofox-browser.enable) {
+                (optionalAttrs (cfg.cdp.enable) {
+                  settings = {
+                    browser.cdp_url = cfg.cdp-compose-cfg.url;
+                  };
+                })
+                (optionalAttrs (!cfg.camofox-browser.enable && !cfg.cdp.enable) {
                   settings = {
                     browser.cloud_provider = "local";
                     browser.engine = "lightpanda";

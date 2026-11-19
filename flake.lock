@@ -2,8 +2,12 @@
   "nodes": {
     "camoufox-nix": {
       "inputs": {
-        "flake-parts": ["flake-parts"],
-        "nixpkgs": ["nixpkgs-2611"],
+        "flake-parts": [
+          "flake-parts"
+        ],
+        "nixpkgs": [
+          "nixpkgs-2611"
+        ],
         "nixpkgs-browseros": "nixpkgs-browseros",
         "systems": "systems",
         "treefmt-nix": "treefmt-nix"
@@ -19,6 +23,25 @@
       "original": {
         "owner": "maximoffua",
         "repo": "camoufox-nix",
+        "type": "github"
+      }
+    },
+    "cloakbrowser": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1793439328,
+        "narHash": "sha256-/LQMAupkBrhMlpNkmVOVHoxa9Z0/6UMKP6sTBd+SwNM=",
+        "owner": "CloakHQ",
+        "repo": "CloakBrowser",
+        "rev": "b860957b1299967e1f0226b629b1da2d36e53c82",
+        "type": "github"
+      },
+      "original": {
+        "owner": "CloakHQ",
+        "ref": "v0.6.5",
+        "repo": "CloakBrowser",
         "type": "github"
       }
     },
@@ -39,7 +62,9 @@
     },
     "disko": {
       "inputs": {
-        "nixpkgs": ["nixpkgs"]
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1768920986,
@@ -58,7 +83,10 @@
     },
     "fenix": {
       "inputs": {
-        "nixpkgs": ["lightpanda", "nixpkgs"],
+        "nixpkgs": [
+          "lightpanda",
+          "nixpkgs"
+        ],
         "rust-analyzer-src": "rust-analyzer-src"
       },
       "locked": {
@@ -77,7 +105,9 @@
     },
     "flake-parts": {
       "inputs": {
-        "nixpkgs-lib": ["nixpkgs"]
+        "nixpkgs-lib": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1793576659,
@@ -95,7 +125,10 @@
     },
     "flake-parts_2": {
       "inputs": {
-        "nixpkgs-lib": ["hermes-agent", "nixpkgs"]
+        "nixpkgs-lib": [
+          "hermes-agent",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1790898470,
@@ -133,7 +166,7 @@
       "inputs": {
         "flake-parts": "flake-parts_2",
         "home-manager": "home-manager",
-        "nixpkgs": "nixpkgs",
+        "nixpkgs": "nixpkgs_2",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
         "uv2nix": "uv2nix"
@@ -171,7 +204,10 @@
     },
     "home-manager": {
       "inputs": {
-        "nixpkgs": ["hermes-agent", "nixpkgs"]
+        "nixpkgs": [
+          "hermes-agent",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1792703141,
@@ -189,7 +225,9 @@
     },
     "home-manager-2611": {
       "inputs": {
-        "nixpkgs": ["nixpkgs-2611"]
+        "nixpkgs": [
+          "nixpkgs-2611"
+        ]
       },
       "locked": {
         "lastModified": 1794278858,
@@ -208,7 +246,9 @@
     },
     "home-manager_2": {
       "inputs": {
-        "nixpkgs": ["nixpkgs-2605"]
+        "nixpkgs": [
+          "nixpkgs-2605"
+        ]
       },
       "locked": {
         "lastModified": 1792818383,
@@ -230,7 +270,7 @@
         "crane": "crane",
         "fenix": "fenix",
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs_3",
         "zig-flake": "zig-flake",
         "zls": "zls"
       },
@@ -267,7 +307,9 @@
     },
     "nix-index-database": {
       "inputs": {
-        "nixpkgs": ["nixpkgs"]
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1793543282,
@@ -285,7 +327,9 @@
     },
     "nixos-hardware": {
       "inputs": {
-        "nixpkgs": ["nixpkgs"]
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1793871777,
@@ -303,11 +347,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1792502884,
-        "narHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
+        "lastModified": 1777954456,
+        "narHash": "sha256-hGdgeU2Nk87RAuZyYjyDjFL6LK7dAZN5RE9+hrDTkDU=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+        "rev": "549bd84d6279f9852cae6225e372cc67fb91a4c1",
         "type": "github"
       },
       "original": {
@@ -367,6 +411,22 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1792502884,
+        "narHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1794165970,
         "narHash": "sha256-XuAV2cUwaod3Bt4XFVqiXz3v1w2ex16W6Sv4S7EWres=",
         "owner": "nixos",
@@ -399,9 +459,18 @@
     },
     "pyproject-build-systems": {
       "inputs": {
-        "nixpkgs": ["hermes-agent", "nixpkgs"],
-        "pyproject-nix": ["hermes-agent", "pyproject-nix"],
-        "uv2nix": ["hermes-agent", "uv2nix"]
+        "nixpkgs": [
+          "hermes-agent",
+          "nixpkgs"
+        ],
+        "pyproject-nix": [
+          "hermes-agent",
+          "pyproject-nix"
+        ],
+        "uv2nix": [
+          "hermes-agent",
+          "uv2nix"
+        ]
       },
       "locked": {
         "lastModified": 1792499785,
@@ -419,7 +488,10 @@
     },
     "pyproject-nix": {
       "inputs": {
-        "nixpkgs": ["hermes-agent", "nixpkgs"]
+        "nixpkgs": [
+          "hermes-agent",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1791657700,
@@ -438,6 +510,7 @@
     "root": {
       "inputs": {
         "camoufox-nix": "camoufox-nix",
+        "cloakbrowser": "cloakbrowser",
         "disko": "disko",
         "flake-parts": "flake-parts",
         "hermes-agent": "hermes-agent",
@@ -448,7 +521,9 @@
         "nix-flatpak": "nix-flatpak",
         "nix-index-database": "nix-index-database",
         "nixos-hardware": "nixos-hardware",
-        "nixpkgs": ["nixpkgs-2605"],
+        "nixpkgs": [
+          "nixpkgs-2605"
+        ],
         "nixpkgs-2605": "nixpkgs-2605",
         "nixpkgs-2611": "nixpkgs-2611",
         "oisd": "oisd",
@@ -474,7 +549,9 @@
     },
     "sops-nix": {
       "inputs": {
-        "nixpkgs": ["nixpkgs"]
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1793657466,
@@ -522,7 +599,10 @@
     },
     "treefmt-nix": {
       "inputs": {
-        "nixpkgs": ["camoufox-nix", "nixpkgs"]
+        "nixpkgs": [
+          "camoufox-nix",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1791885023,
@@ -540,8 +620,14 @@
     },
     "uv2nix": {
       "inputs": {
-        "nixpkgs": ["hermes-agent", "nixpkgs"],
-        "pyproject-nix": ["hermes-agent", "pyproject-nix"]
+        "nixpkgs": [
+          "hermes-agent",
+          "nixpkgs"
+        ],
+        "pyproject-nix": [
+          "hermes-agent",
+          "pyproject-nix"
+        ]
       },
       "locked": {
         "lastModified": 1792666911,
@@ -559,7 +645,10 @@
     },
     "zig-flake": {
       "inputs": {
-        "nixpkgs": ["lightpanda", "nixpkgs"]
+        "nixpkgs": [
+          "lightpanda",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1793623283,
@@ -577,8 +666,14 @@
     },
     "zls": {
       "inputs": {
-        "nixpkgs": ["lightpanda", "nixpkgs"],
-        "zig-flake": ["lightpanda", "zig-flake"]
+        "nixpkgs": [
+          "lightpanda",
+          "nixpkgs"
+        ],
+        "zig-flake": [
+          "lightpanda",
+          "zig-flake"
+        ]
       },
       "locked": {
         "lastModified": 1790989120,

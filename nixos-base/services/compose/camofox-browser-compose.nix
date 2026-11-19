@@ -51,7 +51,7 @@ in {
           default = outerCfg.myOpt.sleep-on-idle.${cfg.sleep-on-idle-id};
           readOnly = true;
         };
-        CAMOFOX_URL = mkOption {
+        url = mkOption {
           type = types.strMatching "^http://[^/]+:[0-9]+$";
           default = "http://${pkgs.myLib.bracketIpv6 cfg.sleep-on-idle-cfg.endpoints.default.proxy.ip-socket}";
           readOnly = true;

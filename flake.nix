@@ -6,13 +6,24 @@
     # nixpkgs-2611.follows = "hermes-agent/nixpkgs";
     hermes-agent = {
       url = "github:NousResearch/hermes-agent/v0.23.1"; # See https://github.com/NousResearch/hermes-agent/tags
-      # inputs.nixpkgs.follows = "nixpkgs"; # No inputs.nixpkgs.follows for hermes-agent.cachix.org to work # No rebuild when update nixpkgs. Rebuiild only we update hermes-agent.
-      # inputs.flake-parts.follows = "flake-parts";
+      # No inputs.nixpkgs.follows for hermes-agent.cachix.org to work
+      # No rebuild when we update nixpkgs. Rebuiild only when we update the flake.
     };
+    cloakbrowser = {
+      url = "github:CloakHQ/CloakBrowser/v0.6.5"; # The project is dead. Updates beyond v0.6.5 will be footguns.
+      # No inputs.nixpkgs.follows.
+      # No rebuild when we update nixpkgs. Rebuiild only when we update the flake.
+    }; # tmp
     lightpanda = {
       url = "github:lightpanda-io/browser/1.0.3";
-      # inputs.nixpkgs.follows = "nixpkgs"; # No rebuild when update nixpkgs. Rebuiild only we update lightpanda.
+      # No inputs.nixpkgs.follows.
+      # No rebuild when we update nixpkgs. Rebuiild only when we update the flake.
     }; # tmp
+    hermes-official-plugins = {
+      url = "github:NousResearch/hermes-official-plugins";
+      flake = false;
+    }; # tmp
+
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs-2605";
@@ -51,10 +62,6 @@
       url = "github:maximoffua/camoufox-nix";
       inputs.nixpkgs.follows = "nixpkgs-2611";
       inputs.flake-parts.follows = "flake-parts";
-    };
-    hermes-official-plugins = {
-      url = "github:NousResearch/hermes-official-plugins";
-      flake = false;
     };
   };
   outputs = inputs: (inputs.flake-parts.lib.mkFlake {inherit inputs;} {
