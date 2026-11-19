@@ -61,10 +61,6 @@ in {
           serviceConfig = {
             Type = "exec";
             ExecStart = utils.escapeSystemdExecArgs [
-              "${pkgs.dbus}/bin/dbus-run-session"
-              "--dbus-daemon=${pkgs.dbus}/bin/dbus-daemon"
-              "--config-file=${pkgs.dbus}/share/dbus-1/session.conf"
-              "--"
               (getExe cfg.package)
               "--headless=new"
               "--remote-debugging-port=${toString cfg.port}"
@@ -84,7 +80,6 @@ in {
             UMask = "0077";
             NoNewPrivileges = true;
             PrivateTmp = true;
-            PrivateDevices = true;
             ProtectSystem = "strict";
             ProtectHome = true;
             ProtectKernelTunables = true;
