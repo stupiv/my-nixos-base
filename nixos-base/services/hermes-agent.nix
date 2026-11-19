@@ -84,12 +84,6 @@ in {
             default = cfg.camofox-browser-compose-id != null;
             readOnly = true;
           };
-          plugin = mkOption {
-            type = types.package;
-            default = pkgs.runCommand "camofox" {} ''
-              cp -r ${inputs.hermes-official-plugins}/camofox $out
-            '';
-          };
         };
         sops.envFile = {
           key = mkOption {
@@ -115,8 +109,8 @@ in {
   config = mkIf (enabled != {}) {
     assertions = flatten (mapAttrsToList (name: cfg: [
         {
-          assertion = !cfg.camofox-browser.enable || (cfg.netns == cfg.camofox-browser-compose-cfg.netns);
-          message = "assertion = !cfg.camofox-browser.enable || (cfg.netns == cfg.camofox-browser-compose-cfg.netns);";
+          assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-compose-cfg.netns-id);
+          message = "assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-compose-cfg.netns-id);";
         }
       ])
       enabled);
@@ -156,7 +150,6 @@ in {
               services.hermes-agent = mkMerge [
                 cfg.modules.services.hermes-agent
                 (optionalAttrs (cfg.camofox-browser.enable) {
-                  extraPlugins = [cfg.camofox-browser.plugin];
                   settings = {
                     browser.cloud_provider = "camofox";
                     browser.engine = "";
@@ -184,10 +177,6 @@ in {
                     mode = mkDefault "serve";
                   };
                   addToSystemPackages = true;
-                  settings = {
-                    display.busy_input_mode = mkDefault "steer";
-                    moa.presets.default.enabled = mkDefault false;
-                  };
                 }
               ];
             };

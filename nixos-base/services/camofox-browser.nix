@@ -65,10 +65,6 @@ in {
         sleep-on-idle-id = mkOption {
           type = types.nullOr types.singleLineStr;
         };
-        squid-id = mkOption {
-          type = types.nullOr types.singleLineStr;
-          default = null;
-        };
       };
     }));
   };
@@ -129,10 +125,5 @@ in {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent.systemd-services = [cfg.serviceName];
       })
       (filterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
-
-    myOpt.squid = mkMerge (mapAttrsToList (_: cfg: {
-        ${cfg.squid-id}.set-env-vars.systemd-services = [cfg.serviceName];
-      })
-      (filterAttrs (_: cfg: cfg.squid-id != null) enabled));
   };
 }

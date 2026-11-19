@@ -73,14 +73,17 @@ in {
       enabled);
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.netns-id} = {
-          enable = true;
-          set-network-namespace = {
-            oci-containers = mk-container-names cfg;
-            systemd-services = [];
-            nixos-containers = [];
-          };
-        };
+        ${cfg.netns-id} = mkMerge [
+          cfg.modules.netns
+          {
+            enable = true;
+            set-network-namespace = {
+              oci-containers = mk-container-names cfg;
+              systemd-services = [];
+              nixos-containers = [];
+            };
+          }
+        ];
       })
       enabled);
 

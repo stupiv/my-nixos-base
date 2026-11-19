@@ -19,12 +19,16 @@ in {
         };
         modules = {
           proxy-compose = mkOption {
-            type = types.anything;
             default = {};
+            type = types.anything;
           };
           squid = mkOption {
-            type = types.anything;
             default = {};
+            type = types.anything;
+          };
+          netns = mkOption {
+            default = {};
+            type = types.anything;
           };
         };
         proxy-compose-id = mkOption {
