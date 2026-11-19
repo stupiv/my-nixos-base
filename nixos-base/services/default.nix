@@ -3,6 +3,7 @@
     ./compose
     ./sleep-on-idle
     ./caddy.nix
+    ./camofox-browser.nix
     ./cloudflared.nix
     # ./default.nix
     ./fastcrw.nix
