@@ -3,6 +3,7 @@
   lib,
   pkgs,
   inputs,
+  utils,
   ...
 }:
 with lib; let
@@ -59,9 +60,21 @@ in {
           };
           serviceConfig = {
             Type = "exec";
-            ExecStart = "${getExe cfg.package} --headless=new --remote-debugging-port=${toString cfg.port} --remote-debugging-address=${cfg.host} --user-data-dir='$HOME/cdp-debug' --no-first-run --no-default-browser-check";
+            ExecStart = utils.escapeSystemdExecArgs [
+              "${pkgs.dbus}/bin/dbus-run-session"
+              "--dbus-daemon=${pkgs.dbus}/bin/dbus-daemon"
+              "--config-file=${pkgs.dbus}/share/dbus-1/session.conf"
+              "--"
+              (getExe cfg.package)
+              "--headless=new"
+              "--remote-debugging-port=${toString cfg.port}"
+              "--remote-debugging-address=${cfg.host}"
+              "--user-data-dir=$HOME/cdp-debug"
+              "--no-first-run"
+              "--no-default-browser-check"
+            ];
             Restart = "on-failure";
-            KillMode = "mixed";
+            KillMode = "control-group";
             DynamicUser = true;
             WorkingDirectory = "%S/${cfg.StateDirectory}";
             StateDirectory = cfg.StateDirectory;
