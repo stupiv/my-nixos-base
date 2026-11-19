@@ -11,7 +11,9 @@ with lib; let
 in {
   options.myOpt.camofox-browser-compose = mkOption {
     default = {};
-    type = types.attrsOf (types.submodule ({name, ...}: {
+    type = types.attrsOf (types.submodule ({name, ...} @ innerArgs: let
+      cfg = innerArgs.config;
+    in {
       options = {
         enable = mkOption {
           type = types.bool;
@@ -20,25 +22,23 @@ in {
         modules = {
           sleep-on-idle = mkOption {
             type = types.anything;
+            default = {};
           };
           camofox-browser = mkOption {
             type = types.anything;
+            default = {};
           };
-        };
-        container.name = mkOption {
-          type = types.singleLineStr;
-          default = name;
         };
         sleep-on-idle-id = mkOption {
           type = types.singleLineStr;
           default = name;
         };
         netns-id = mkOption {
-          type = types.singleLineStr;
+          type = types.nullOr types.singleLineStr;
           default = null;
         };
         camofox-browser-id = mkOption {
-          type = types.name;
+          type = types.singleLineStr;
           default = name;
         };
         camofox-browser-cfg = mkOption {
@@ -53,7 +53,7 @@ in {
         };
         CAMOFOX_URL = mkOption {
           type = types.strMatching "^http://[^/]+:[0-9]+$";
-          default = "http://${pkgs.myLib.bracketIpv6 cfg.sleep-on-idle-cfg.ip-socket}";
+          default = "http://${pkgs.myLib.bracketIpv6 cfg.sleep-on-idle-cfg.endpoints.default.proxy.ip-socket}";
           readOnly = true;
         };
       };
@@ -72,6 +72,7 @@ in {
                 inherit (cfg.camofox-browser-cfg) host port;
               };
               proxy = {
+                inherit (cfg.modules.sleep-on-idle.endpoints.default.proxy) port;
                 inherit (cfg) netns-id;
               };
             };
@@ -89,7 +90,7 @@ in {
           cfg.modules.camofox-browser
           {
             enable = true;
-            inherit (cfg) sleep-on-idle netns-id;
+            inherit (cfg) sleep-on-idle-id netns-id;
           }
         ];
       })

@@ -21,6 +21,7 @@ in {
         };
         modules = {
           services.hermes-agent = mkOption {
+            default = {};
             type = types.submodule ({...}: {
               freeformType = types.anything;
               options = {
@@ -32,6 +33,7 @@ in {
             });
           };
           containers = mkOption {
+            default = {};
             type = types.anything;
           };
         };
@@ -79,7 +81,7 @@ in {
         camofox-browser = {
           enable = mkOption {
             type = types.bool;
-            default = camofox-browser-compose-id != null;
+            default = cfg.camofox-browser-compose-id != null;
             readOnly = true;
           };
           plugin = mkOption {
