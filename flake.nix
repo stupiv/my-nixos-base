@@ -12,7 +12,7 @@
     lightpanda = {
       url = "github:lightpanda-io/browser/1.0.3";
       # inputs.nixpkgs.follows = "nixpkgs"; # No rebuild when update nixpkgs. Rebuiild only we update lightpanda.
-    };
+    }; # tmp
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs-2605";
@@ -51,6 +51,10 @@
       url = "github:maximoffua/camoufox-nix";
       inputs.nixpkgs.follows = "nixpkgs-2611";
       inputs.flake-parts.follows = "flake-parts";
+    };
+    hermes-official-plugins = {
+      url = "github:NousResearch/hermes-official-plugins";
+      flake = false;
     };
   };
   outputs = inputs: (inputs.flake-parts.lib.mkFlake {inherit inputs;} {

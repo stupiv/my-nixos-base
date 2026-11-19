@@ -7,8 +7,8 @@
 }:
 with lib; let
   outerCfg = config;
-  camoufox-nix-pkgs = inputs.camoufox-nix.packages.${pkgs.stdenv.hostPlatform.system};
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.camofox-browser;
+  inherit (inputs.camoufox-nix.packages.${pkgs.stdenv.hostPlatform.system}) camoufox-bin;
 in {
   options.myOpt.camofox-browser = mkOption {
     default = {};
@@ -24,14 +24,13 @@ in {
           type = types.singleLineStr;
           default = "camofox-browser-${name}";
         };
-        browserPackage = mkOption {
+        camoufox.package = mkOption {
           type = types.package;
-          default = camoufox-nix-pkgs.camoufox-bin;
+          default = camoufox-bin;
         };
         package = mkOption {
           type = types.package;
-          default = camoufox-nix-pkgs.camofox-browser.override {camoufox = cfg.browserPackage;};
-          readOnly = true;
+          default = camoufox-bin.camofox-browser;
         };
         host = mkOption {
           type = types.singleLineStr;
@@ -39,11 +38,6 @@ in {
         };
         port = mkOption {
           type = types.port;
-        };
-        CAMOFOX_URL = mkOption {
-          type = types.singleLineStr;
-          default = "http://${pkgs.myLib.bracketIpv6 "${cfg.host}:${toString cfg.port}"}";
-          readOnly = true;
         };
         stateDir = mkOption {
           type = types.singleLineStr;
@@ -69,9 +63,11 @@ in {
         };
         netns-id = mkOption {
           type = types.nullOr types.singleLineStr;
-          default = null;
         };
         sleep-on-idle-id = mkOption {
+          type = types.nullOr types.singleLineStr;
+        };
+        squid-id = mkOption {
           type = types.nullOr types.singleLineStr;
           default = null;
         };
@@ -90,12 +86,10 @@ in {
 
     systemd.services = mapAttrs' (_: cfg:
       nameValuePair cfg.serviceName {
-        wantedBy = ["multi-user.target"];
-        after = ["network.target" "nss-lookup.target"];
         environment = {
           CAMOFOX_HOST = cfg.host;
           CAMOFOX_PORT = toString cfg.port;
-          CAMOUFOX_EXECUTABLE = getExe cfg.browserPackage;
+          CAMOUFOX_EXECUTABLE = getExe cfg.camoufox.package;
           CAMOFOX_ALLOW_PRIVATE_NETWORK = "false";
           NODE_ENV = "production";
           HOME = "%S/${cfg.stateDir}";
@@ -140,5 +134,10 @@ in {
         ${cfg.sleep-on-idle-id}.set-cgroup-parent.systemd-services = [cfg.serviceName];
       })
       (filterAttrs (_: cfg: cfg.sleep-on-idle-id != null) enabled));
+
+    myOpt.squid = mkMerge (mapAttrsToList (_: cfg: {
+        ${cfg.squid-id}.set-env-vars.systemd-services = [cfg.serviceName];
+      })
+      (filterAttrs (_: cfg: cfg.squid-id != null) enabled));
   };
 }

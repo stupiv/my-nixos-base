@@ -39,19 +39,11 @@ in {
         netns-id = mkOption {
           type = types.anything;
           default = null;
-          readOnly = true;
         };
         hermes-agent-id = mkOption {
           type = types.anything;
           default = name;
         };
-        camofox-browser-oci-id = mkOption {
-          type = types.anything;
-          default = name;
-        };
-        # camofox-plugin = mkOption {
-        #   type = types.package;
-        # };
       };
     }));
   };

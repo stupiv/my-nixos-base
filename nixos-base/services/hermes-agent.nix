@@ -21,7 +21,15 @@ in {
         };
         modules = {
           services.hermes-agent = mkOption {
-            type = types.anything;
+            type = types.submodule ({...}: {
+              freeformType = types.anything;
+              options = {
+                package = mkOption {
+                  type = types.package;
+                  default = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.default;
+                };
+              };
+            });
           };
           containers = mkOption {
             type = types.anything;
@@ -60,6 +68,27 @@ in {
         netns-id = mkOption {
           type = types.nullOr types.singleLineStr;
         };
+        camofox-browser-compose-id = mkOption {
+          type = types.nullOr types.singleLineStr;
+        };
+        camofox-browser-compose-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.myOpt.camofox-browser-compose.${cfg.camofox-browser-compose-id};
+          readOnly = true;
+        };
+        camofox-browser = {
+          enable = mkOption {
+            type = types.bool;
+            default = camofox-browser-compose-id != null;
+            readOnly = true;
+          };
+          plugin = mkOption {
+            type = types.package;
+            default = pkgs.runCommand "camofox" {} ''
+              cp -r ${inputs.hermes-official-plugins}/camofox $out
+            '';
+          };
+        };
         sops.envFile = {
           key = mkOption {
             type = types.singleLineStr;
@@ -75,12 +104,21 @@ in {
         };
         lightpanda.package = mkOption {
           type = types.package;
+          default = inputs.lightpanda.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
       };
     }));
   };
 
   config = mkIf (enabled != {}) {
+    assertions = flatten (mapAttrsToList (name: cfg: [
+        {
+          assertion = !cfg.camofox-browser.enable || (cfg.netns == cfg.camofox-browser-compose-cfg.netns);
+          message = "assertion = !cfg.camofox-browser.enable || (cfg.netns == cfg.camofox-browser-compose-cfg.netns);";
+        }
+      ])
+      enabled);
+
     sops.useTmpfs = true;
     sops.secrets = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.sops.envFile.key} = {
@@ -115,6 +153,24 @@ in {
               users.groups.${cfg.hermes-agent-cfg.group}.gid = cfg.gid;
               services.hermes-agent = mkMerge [
                 cfg.modules.services.hermes-agent
+                (optionalAttrs (cfg.camofox-browser.enable) {
+                  extraPlugins = [cfg.camofox-browser.plugin];
+                  settings = {
+                    browser.cloud_provider = "camofox";
+                    browser.engine = "";
+                    plugins.enabled = ["camofox"];
+                  };
+                  environment = {
+                    inherit (cfg.camofox-browser-compose-cfg) CAMOFOX_URL;
+                  };
+                })
+                (optionalAttrs (!cfg.camofox-browser.enable) {
+                  settings = {
+                    browser.cloud_provider = "local";
+                    browser.engine = "lightpanda";
+                  };
+                  extraPackages = [cfg.lightpanda.package];
+                })
                 {
                   enable = true;
                   inherit (cfg) stateDir;
@@ -125,14 +181,11 @@ in {
                     host = mkDefault "::1";
                     mode = mkDefault "serve";
                   };
-                  settings.browser = {
-                    cloud_provider = "local";
-                    engine = "lightpanda";
-                  };
-                  extraPackages = with pkgs; [
-                    cfg.lightpanda.package
-                  ];
                   addToSystemPackages = true;
+                  settings = {
+                    display.busy_input_mode = mkDefault "steer";
+                    moa.presets.default.enabled = mkDefault false;
+                  };
                 }
               ];
             };
@@ -142,19 +195,19 @@ in {
       enabled);
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.netns-id}.set-network-namespace = {
-          nixos-containers = [
-            cfg.container.name
-          ];
+        ${cfg.netns-id} = {
+          set-network-namespace = {
+            nixos-containers = [cfg.container.name];
+          };
         };
       })
       (filterAttrs (name: cfg: cfg.netns-id != null) enabled));
 
     myOpt.sleep-on-idle = mkMerge (mapAttrsToList (name: cfg: {
-        ${cfg.sleep-on-idle-id}.set-cgroup-parent = {
-          nixos-containers = [
-            cfg.container.name
-          ];
+        ${cfg.sleep-on-idle-id} = {
+          set-cgroup-parent = {
+            nixos-containers = [cfg.container.name];
+          };
         };
       })
       (filterAttrs (name: cfg: cfg.sleep-on-idle-id != null) enabled));

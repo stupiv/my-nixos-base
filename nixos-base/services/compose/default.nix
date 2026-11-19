@@ -2,6 +2,7 @@
   imports = [
     ./frappe-v16-compose
     # ./unmaintained
+    ./camofox-browser-compose.nix
     # ./default.nix
     ./hermes-agent-compose.nix
     ./keycloak-compose.nix

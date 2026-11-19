@@ -2,12 +2,8 @@
   "nodes": {
     "camoufox-nix": {
       "inputs": {
-        "flake-parts": [
-          "flake-parts"
-        ],
-        "nixpkgs": [
-          "nixpkgs-2611"
-        ],
+        "flake-parts": ["flake-parts"],
+        "nixpkgs": ["nixpkgs-2611"],
         "nixpkgs-browseros": "nixpkgs-browseros",
         "systems": "systems",
         "treefmt-nix": "treefmt-nix"
@@ -43,9 +39,7 @@
     },
     "disko": {
       "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
+        "nixpkgs": ["nixpkgs"]
       },
       "locked": {
         "lastModified": 1768920986,
@@ -64,10 +58,7 @@
     },
     "fenix": {
       "inputs": {
-        "nixpkgs": [
-          "lightpanda",
-          "nixpkgs"
-        ],
+        "nixpkgs": ["lightpanda", "nixpkgs"],
         "rust-analyzer-src": "rust-analyzer-src"
       },
       "locked": {
@@ -86,9 +77,7 @@
     },
     "flake-parts": {
       "inputs": {
-        "nixpkgs-lib": [
-          "nixpkgs"
-        ]
+        "nixpkgs-lib": ["nixpkgs"]
       },
       "locked": {
         "lastModified": 1793576659,
@@ -106,10 +95,7 @@
     },
     "flake-parts_2": {
       "inputs": {
-        "nixpkgs-lib": [
-          "hermes-agent",
-          "nixpkgs"
-        ]
+        "nixpkgs-lib": ["hermes-agent", "nixpkgs"]
       },
       "locked": {
         "lastModified": 1790898470,
@@ -167,12 +153,25 @@
         "type": "github"
       }
     },
+    "hermes-official-plugins": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794910510,
+        "narHash": "sha256-bj1Z+rq819mttPE82ulEsS3qgIrWcASqXtXC5LO45C0=",
+        "owner": "NousResearch",
+        "repo": "hermes-official-plugins",
+        "rev": "e726eb7d5f6e7f4b2f3d149e482fcfbc7304b275",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NousResearch",
+        "repo": "hermes-official-plugins",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
-        "nixpkgs": [
-          "hermes-agent",
-          "nixpkgs"
-        ]
+        "nixpkgs": ["hermes-agent", "nixpkgs"]
       },
       "locked": {
         "lastModified": 1792703141,
@@ -190,9 +189,7 @@
     },
     "home-manager-2611": {
       "inputs": {
-        "nixpkgs": [
-          "nixpkgs-2611"
-        ]
+        "nixpkgs": ["nixpkgs-2611"]
       },
       "locked": {
         "lastModified": 1794278858,
@@ -211,9 +208,7 @@
     },
     "home-manager_2": {
       "inputs": {
-        "nixpkgs": [
-          "nixpkgs-2605"
-        ]
+        "nixpkgs": ["nixpkgs-2605"]
       },
       "locked": {
         "lastModified": 1792818383,
@@ -272,9 +267,7 @@
     },
     "nix-index-database": {
       "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
+        "nixpkgs": ["nixpkgs"]
       },
       "locked": {
         "lastModified": 1793543282,
@@ -292,9 +285,7 @@
     },
     "nixos-hardware": {
       "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
+        "nixpkgs": ["nixpkgs"]
       },
       "locked": {
         "lastModified": 1793871777,
@@ -408,18 +399,9 @@
     },
     "pyproject-build-systems": {
       "inputs": {
-        "nixpkgs": [
-          "hermes-agent",
-          "nixpkgs"
-        ],
-        "pyproject-nix": [
-          "hermes-agent",
-          "pyproject-nix"
-        ],
-        "uv2nix": [
-          "hermes-agent",
-          "uv2nix"
-        ]
+        "nixpkgs": ["hermes-agent", "nixpkgs"],
+        "pyproject-nix": ["hermes-agent", "pyproject-nix"],
+        "uv2nix": ["hermes-agent", "uv2nix"]
       },
       "locked": {
         "lastModified": 1792499785,
@@ -437,10 +419,7 @@
     },
     "pyproject-nix": {
       "inputs": {
-        "nixpkgs": [
-          "hermes-agent",
-          "nixpkgs"
-        ]
+        "nixpkgs": ["hermes-agent", "nixpkgs"]
       },
       "locked": {
         "lastModified": 1791657700,
@@ -462,15 +441,14 @@
         "disko": "disko",
         "flake-parts": "flake-parts",
         "hermes-agent": "hermes-agent",
+        "hermes-official-plugins": "hermes-official-plugins",
         "home-manager": "home-manager_2",
         "home-manager-2611": "home-manager-2611",
         "lightpanda": "lightpanda",
         "nix-flatpak": "nix-flatpak",
         "nix-index-database": "nix-index-database",
         "nixos-hardware": "nixos-hardware",
-        "nixpkgs": [
-          "nixpkgs-2605"
-        ],
+        "nixpkgs": ["nixpkgs-2605"],
         "nixpkgs-2605": "nixpkgs-2605",
         "nixpkgs-2611": "nixpkgs-2611",
         "oisd": "oisd",
@@ -496,9 +474,7 @@
     },
     "sops-nix": {
       "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
+        "nixpkgs": ["nixpkgs"]
       },
       "locked": {
         "lastModified": 1793657466,
@@ -546,10 +522,7 @@
     },
     "treefmt-nix": {
       "inputs": {
-        "nixpkgs": [
-          "camoufox-nix",
-          "nixpkgs"
-        ]
+        "nixpkgs": ["camoufox-nix", "nixpkgs"]
       },
       "locked": {
         "lastModified": 1791885023,
@@ -567,14 +540,8 @@
     },
     "uv2nix": {
       "inputs": {
-        "nixpkgs": [
-          "hermes-agent",
-          "nixpkgs"
-        ],
-        "pyproject-nix": [
-          "hermes-agent",
-          "pyproject-nix"
-        ]
+        "nixpkgs": ["hermes-agent", "nixpkgs"],
+        "pyproject-nix": ["hermes-agent", "pyproject-nix"]
       },
       "locked": {
         "lastModified": 1792666911,
@@ -592,10 +559,7 @@
     },
     "zig-flake": {
       "inputs": {
-        "nixpkgs": [
-          "lightpanda",
-          "nixpkgs"
-        ]
+        "nixpkgs": ["lightpanda", "nixpkgs"]
       },
       "locked": {
         "lastModified": 1793623283,
@@ -613,14 +577,8 @@
     },
     "zls": {
       "inputs": {
-        "nixpkgs": [
-          "lightpanda",
-          "nixpkgs"
-        ],
-        "zig-flake": [
-          "lightpanda",
-          "zig-flake"
-        ]
+        "nixpkgs": ["lightpanda", "nixpkgs"],
+        "zig-flake": ["lightpanda", "zig-flake"]
       },
       "locked": {
         "lastModified": 1790989120,
