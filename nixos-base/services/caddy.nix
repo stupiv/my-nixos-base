@@ -121,7 +121,7 @@ in {
 
   config = mkIf (enabled != {}) {
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${builtins.dirOf cfg.local.unix.socket} 0711 caddy caddy - -"
+        "d '${builtins.dirOf cfg.local.unix.socket}' 0711 caddy caddy - -"
       ])
       (filterAttrs (_: cfg: cfg.local.unix.enable) enabled));
 

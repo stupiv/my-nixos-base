@@ -101,8 +101,8 @@ in {
       enabled);
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${cfg._home_node_dotn8n} 0711 1000 1000 - -"
-        "d ${cfg._home_node_dotn8n-files} 0711 1000 1000 - -"
+        "d '${cfg._home_node_dotn8n}' 0711 1000 1000 - -"
+        "d '${cfg._home_node_dotn8n-files}' 0711 1000 1000 - -"
       ])
       enabled);
 

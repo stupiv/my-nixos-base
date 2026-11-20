@@ -47,7 +47,7 @@ in {
   };
   config = mkIf (enabled != {}) {
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${builtins.dirOf cfg.proxy.unix.socket} ${cfg.mode} ${toString cfg.uid} ${toString cfg.gid} - -"
+        "d '${builtins.dirOf cfg.proxy.unix.socket}' ${cfg.mode} ${toString cfg.uid} ${toString cfg.gid} - -"
       ])
       enabled);
 

@@ -17,9 +17,9 @@ with lib; let
   ipv6Endpoints =
     map (addr: (builtins.tryEval (lib.network.ipv6.fromString addr).address).value)
     (concatMap (cfg: with cfg.public-egress.ipv6; [address gateway]) (attrValues ipv6Egress));
-  ip = getExe pkgs.iproute2;
-  nft = getExe pkgs.nftables;
-  grep = getExe pkgs.gnugrep;
+  ip = "${pkgs.iproute2}/bin/ip";
+  nft = "${pkgs.nftables}/bin/nft";
+  grep = "${pkgs.gnugrep}/bin/grep";
 in {
   options.myOpt.netns = mkOption {
     default = {};

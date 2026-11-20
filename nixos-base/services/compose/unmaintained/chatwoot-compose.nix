@@ -159,12 +159,12 @@ in {
       enabled-chatwoot-compose;
 
     systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-        "d ${cfg.chatwoot.stateDir} - - - - -"
-        "d ${cfg.pgvector.stateDir} - - - - -"
-        "d ${cfg.valkey.stateDir} - - - - -"
-        "d ${cfg.chatwoot.socket-folder} - - - - -"
-        "d ${cfg.pgvector.socket-folder} - - - - -"
-        "d ${cfg.valkey.socket-folder} - - - - -"
+        "d '${cfg.chatwoot.stateDir}' - - - - -"
+        "d '${cfg.pgvector.stateDir}' - - - - -"
+        "d '${cfg.valkey.stateDir}' - - - - -"
+        "d '${cfg.chatwoot.socket-folder}' - - - - -"
+        "d '${cfg.pgvector.socket-folder}' - - - - -"
+        "d '${cfg.valkey.socket-folder}' - - - - -"
       ])
       enabled-chatwoot-compose);
 

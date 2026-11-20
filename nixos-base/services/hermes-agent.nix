@@ -70,21 +70,22 @@ in {
         netns-id = mkOption {
           type = types.nullOr types.singleLineStr;
         };
-        camofox-browser-compose-id = mkOption {
+        camofox-browser-oci-id = mkOption {
           type = types.nullOr types.singleLineStr;
         };
-        camofox-browser-compose-cfg = mkOption {
+        camofox-browser-oci-cfg = mkOption {
           type = types.anything;
-          default = outerCfg.myOpt.camofox-browser-compose.${cfg.camofox-browser-compose-id};
+          default = outerCfg.myOpt.camofox-browser-oci.${cfg.camofox-browser-oci-id};
           readOnly = true;
         };
         camofox-browser.enable = mkOption {
           type = types.bool;
-          default = cfg.camofox-browser-compose-id != null;
+          default = cfg.camofox-browser-oci-id != null;
           readOnly = true;
         };
         cdp-compose-id = mkOption {
           type = types.nullOr types.singleLineStr;
+          default = null;
         };
         cdp-compose-cfg = mkOption {
           type = types.anything;
@@ -109,9 +110,16 @@ in {
             readOnly = true;
           };
         };
-        lightpanda.package = mkOption {
-          type = types.package;
-          default = inputs.lightpanda.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        lightpanda = {
+          enable = mkOption {
+            type = types.bool;
+            default = !cfg.camofox-browser.enable && !cfg.cdp.enable;
+            readOnly = true;
+          };
+          package = mkOption {
+            type = types.package;
+            default = inputs.lightpanda.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          };
         };
       };
     }));
@@ -120,8 +128,8 @@ in {
   config = mkIf (enabled != {}) {
     assertions = flatten (mapAttrsToList (name: cfg: [
         {
-          assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-compose-cfg.netns-id);
-          message = "assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-compose-cfg.netns-id);";
+          assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-oci-cfg.netns-id);
+          message = "assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-oci-cfg.netns-id);";
         }
         {
           assertion = !cfg.cdp.enable || (cfg.netns-id == cfg.cdp-compose-cfg.netns-id);
@@ -167,11 +175,10 @@ in {
                 (optionalAttrs (cfg.camofox-browser.enable) {
                   settings = {
                     browser.cloud_provider = "camofox";
-                    browser.engine = "";
                     plugins.enabled = ["camofox"];
                   };
                   environment = {
-                    CAMOFOX_URL = cfg.camofox-browser-compose-cfg.url;
+                    CAMOFOX_URL = cfg.camofox-browser-oci-cfg.url;
                   };
                 })
                 (optionalAttrs (cfg.cdp.enable) {
@@ -179,12 +186,22 @@ in {
                     browser.cdp_url = cfg.cdp-compose-cfg.url;
                   };
                 })
-                (optionalAttrs (!cfg.camofox-browser.enable && !cfg.cdp.enable) {
+                (optionalAttrs (!cfg.cdp.enable) {
+                  settings = {
+                    browser.cdp_url = "";
+                  };
+                })
+                (optionalAttrs (cfg.lightpanda.enable) {
                   settings = {
                     browser.cloud_provider = "local";
                     browser.engine = "lightpanda";
                   };
                   extraPackages = [cfg.lightpanda.package];
+                })
+                (optionalAttrs (!cfg.lightpanda.enable) {
+                  settings = {
+                    browser.engine = "";
+                  };
                 })
                 {
                   enable = true;
