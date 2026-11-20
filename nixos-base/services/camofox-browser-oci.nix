@@ -21,32 +21,8 @@ in {
         modules = {
           virtualisation.oci-containers.containers = mkOption {
             default = {};
-            type = types.submodule ({...}: {
-              freeformType = types.anything;
-              options = {
-                environment = mkOption {
-                  type = types.submodule ({...}: {
-                    freeformType = types.anything;
-                    options = {
-                      # CAMOFOX_BIND_HOST = mkOption {
-                      #   type = types.singleLineStr;
-                      #   default = "::1";
-                      # };
-                      # CAMOFOX_PORT = mkOption {
-                      #   type = types.singleLineStr;
-                      #   default = toString cfg.port;
-                      #   readOnly = true;
-                      # };
-                    };
-                  });
-                };
-              };
-            });
+            type = types.anything;
           };
-          # systemd.services = mkOption {
-          #   default = {};
-          #   type = types.anything;
-          # };
         };
         sleep-on-idle-id = mkOption {
           type = types.nullOr types.singleLineStr;
@@ -70,13 +46,6 @@ in {
           default = outerCfg.virtualisation.oci-containers.containers.${cfg.oci-container.name};
           readOnly = true;
         };
-        # host = mkOption {
-        #   type = types.singleLineStr;
-        #   default = "::1";
-        # };
-        # port = mkOption {
-        #   type = types.port;
-        # };
         host = mkOption {
           type = types.singleLineStr;
           default = cfg.oci-container-cfg.environment.CAMOFOX_BIND_HOST;
@@ -119,8 +88,6 @@ in {
               inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_PORT;
               CAMOFOX_BIND_HOST = mkDefault "::1";
               # CAMOFOX_DISABLE_DEFAULT_ADDONS = "1";
-              # CAMOFOX_BIND_HOST = cfg.host;
-              # CAMOFOX_PORT = toString cfg.port;
             };
             extraOptions =
               [
@@ -130,21 +97,11 @@ in {
                 "--security-opt=no-new-privileges"
                 "--pids-limit=512"
               ]
-              ++ optional (cfg.netns-id == null) "--network=host";
+              ++ (optional (cfg.netns-id == null) "--network=host");
           }
         ];
       })
       enabled);
-
-    # systemd.services = mkMerge (mapAttrsToList (_: cfg: {
-    #     ${outerCfg.virtualisation.oci-containers.containers.${cfg.oci-container.name}.serviceName} = mkMerge [
-    #       cfg.modules.systemd.services
-    #       {
-    #         inherit (cfg.modules.systemd.services) before after;
-    #       }
-    #     ];
-    #   })
-    #   enabled);
 
     myOpt.netns = mkMerge (mapAttrsToList (name: cfg: {
         ${cfg.netns-id}.set-network-namespace = {

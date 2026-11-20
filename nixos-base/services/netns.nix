@@ -7,16 +7,19 @@
 with lib; let
   outerCfg = config;
   enabled = filterAttrs (_: cfg: cfg.enable) outerCfg.myOpt.netns;
-  ipv4Egress = filterAttrs (_: cfg: cfg.public-egress.ipv4 != null) enabled;
-  ipv6Egress = filterAttrs (_: cfg: cfg.public-egress.ipv6 != null) enabled;
+  ipv4Egress = filterAttrs (_: cfg: cfg.public-egress.ipv4.enable) enabled;
+  ipv6Egress = filterAttrs (_: cfg: cfg.public-egress.ipv6.enable) enabled;
   egress = ipv4Egress // ipv6Egress;
   octet = "(0|[1-9][0-9]?|1[0-9]{2}|2[0-4][0-9]|25[0-5])";
   ipv4Type = types.strMatching "${octet}([.]${octet}){3}";
   ipv6Type = types.strMatching "([[:xdigit:]]{0,4}:){1,8}[[:xdigit:]]{0,4}";
   ipv4Endpoints = concatMap (cfg: with cfg.public-egress.ipv4; [address gateway]) (attrValues ipv4Egress);
-  ipv6Endpoints = map (addr: (builtins.tryEval (lib.network.ipv6.fromString addr).address).value)
+  ipv6Endpoints =
+    map (addr: (builtins.tryEval (lib.network.ipv6.fromString addr).address).value)
     (concatMap (cfg: with cfg.public-egress.ipv6; [address gateway]) (attrValues ipv6Egress));
-  ip = "${pkgs.iproute2}/bin/ip";
+  ip = getExe pkgs.iproute2;
+  nft = getExe pkgs.nftables;
+  grep = getExe pkgs.gnugrep;
 in {
   options.myOpt.netns = mkOption {
     default = {};
@@ -34,13 +37,16 @@ in {
               type = types.bool;
             };
             public-egress.ipv4 = mkOption {
-              type = types.nullOr (types.submodule {
+              type = types.submodule {
                 options = {
+                  enable = mkOption {
+                    type = types.bool;
+                    default = false;
+                  };
                   address = mkOption {type = ipv4Type;};
                   gateway = mkOption {type = ipv4Type;};
                 };
-              });
-              default = null;
+              };
               description = ''
                 Set the namespace address and host gateway to two unused unicast IPv4 addresses without prefixes.
                 Generate a candidate pair (address first, gateway second):
@@ -48,13 +54,16 @@ in {
               '';
             };
             public-egress.ipv6 = mkOption {
-              type = types.nullOr (types.submodule {
+              type = types.submodule {
                 options = {
+                  enable = mkOption {
+                    type = types.bool;
+                    default = false;
+                  };
                   address = mkOption {type = ipv6Type;};
                   gateway = mkOption {type = ipv6Type;};
                 };
-              });
-              default = null;
+              };
               description = ''
                 Set the namespace address and host gateway to two unused unicast IPv6 addresses without prefixes.
                 Generate a candidate pair (address first, gateway second):
@@ -98,8 +107,14 @@ in {
   config = mkIf (enabled != {}) {
     assertions = [
       {
-        assertion = all (addr: addr != false && builtins.match "ff[[:xdigit:]]{2}:.*" addr == null
-          && !(hasPrefix "0:0:0:0:0:ffff:" addr) && addr != "0:0:0:0:0:0:0:0" && addr != "0:0:0:0:0:0:0:1") ipv6Endpoints;
+        assertion = all (addr:
+          addr
+          != false
+          && builtins.match "ff[[:xdigit:]]{2}:.*" addr == null
+          && !(hasPrefix "0:0:0:0:0:ffff:" addr)
+          && addr != "0:0:0:0:0:0:0:0"
+          && addr != "0:0:0:0:0:0:0:1")
+        ipv6Endpoints;
         message = "IPv6 egress endpoints must be valid unicast addresses, not loopback or IPv4-mapped addresses.";
       }
       {
@@ -165,10 +180,7 @@ in {
           inherit (cfg) ns;
           link = "ne-${builtins.substring 0 12 (builtins.hashString "sha256" name)}";
           inherit (cfg.public-egress) ipv4 ipv6;
-          nft = getExe pkgs.nftables;
-          grep = getExe pkgs.gnugrep;
-          inherit (pkgs) writeShellScript writeText;
-          up = writeShellScript "${cfg.serviceName}-up" ''
+          up = pkgs.writeShellScript "${cfg.serviceName}-up" ''
             set -eu
             if ${ip} netns list | ${grep} -qw '${ns}'; then
               ${ip} netns del '${ns}'
@@ -180,19 +192,19 @@ in {
               ${ip} link add ${link} type veth peer name eth0 netns '${ns}'
               ${ip} link set ${link} up
               ${ip} -n '${ns}' link set eth0 up
-              ${optionalString (ipv6 != null) ''
+              ${optionalString (ipv6.enable) ''
                 ${ip} -6 addr add ${ipv6.gateway} peer ${ipv6.address}/128 dev ${link} nodad
                 ${ip} -6 -n '${ns}' addr add ${ipv6.address} peer ${ipv6.gateway}/128 dev eth0 nodad
                 ${ip} -6 -n '${ns}' route add default via ${ipv6.gateway} dev eth0
               ''}
-              ${optionalString (ipv4 != null) ''
+              ${optionalString (ipv4.enable) ''
                 ${ip} -4 addr add ${ipv4.gateway} peer ${ipv4.address}/32 dev ${link}
                 ${ip} -4 -n '${ns}' addr add ${ipv4.address} peer ${ipv4.gateway}/32 dev eth0
                 ${ip} -4 -n '${ns}' route add default via ${ipv4.gateway} dev eth0
               ''}
             ''}
             ${optionalString (cfg.ipv4.disable) ''
-              ${ip} netns exec '${ns}' ${nft} -f ${writeText "disable-ipv4.nft" ''
+              ${ip} netns exec '${ns}' ${nft} -f ${pkgs.writeText "disable-ipv4.nft" ''
                 table ip filter {
                   chain output {
                     type filter hook output priority 0;

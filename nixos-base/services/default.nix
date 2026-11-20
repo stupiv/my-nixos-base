@@ -16,6 +16,7 @@
     ./rclone-automount.nix
     ./searxng.nix
     ./set-env-vars.nix
+    ./socat-oci.nix
     ./squid.nix
     ./systemd-socket-proxyd.nix
     ./valkey.nix
