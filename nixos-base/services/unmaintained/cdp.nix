@@ -26,10 +26,12 @@ in {
         };
         package = mkOption {
           type = types.package;
+          default = inputs.cloakbrowser.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
         host = mkOption {
           type = types.singleLineStr;
-          default = "::1";
+          default = "127.0.0.1";
+          readOnly = true;
         };
         port = mkOption {
           type = types.port;
@@ -46,6 +48,9 @@ in {
         };
         sleep-on-idle-id = mkOption {
           type = types.nullOr types.singleLineStr;
+        };
+        data-dir-name = mkOption {
+          type = types.strMatching "[^/]+";
         };
       };
     }));
@@ -64,22 +69,22 @@ in {
               (getExe cfg.package)
               "--headless=new"
               "--remote-debugging-port=${toString cfg.port}"
-              "--remote-debugging-address=${cfg.host}"
-              "--user-data-dir=$HOME/cdp-debug"
+              "--user-data-dir=${cfg.data-dir-name}"
               "--no-first-run"
               "--no-default-browser-check"
             ];
             Restart = "on-failure";
-            KillMode = "control-group";
             DynamicUser = true;
             WorkingDirectory = "%S/${cfg.StateDirectory}";
             StateDirectory = cfg.StateDirectory;
             StateDirectoryMode = "0700";
             RuntimeDirectory = cfg.RuntimeDirectory;
             RuntimeDirectoryMode = "0700";
+            KillMode = "mixed";
             UMask = "0077";
             NoNewPrivileges = true;
             PrivateTmp = true;
+            PrivateDevices = true;
             ProtectSystem = "strict";
             ProtectHome = true;
             ProtectKernelTunables = true;

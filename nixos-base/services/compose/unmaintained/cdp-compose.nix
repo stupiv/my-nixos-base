@@ -52,8 +52,8 @@ in {
           readOnly = true;
         };
         url = mkOption {
-          type = types.strMatching "^ws://[^/]+:[0-9]+$";
-          default = "ws://${pkgs.myLib.bracketIpv6 cfg.sleep-on-idle-cfg.endpoints.default.proxy.ip-socket}";
+          type = types.strMatching "^http://[^/]+:[0-9]+$";
+          default = "http://${pkgs.myLib.bracketIpv6 cfg.sleep-on-idle-cfg.endpoints.default.proxy.ip-socket}";
           readOnly = true;
         };
       };

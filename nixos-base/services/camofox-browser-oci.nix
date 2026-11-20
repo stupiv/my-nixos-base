@@ -20,6 +20,7 @@ in {
         };
         modules = {
           virtualisation.oci-containers.containers = mkOption {
+            default = {};
             type = types.submodule ({...}: {
               freeformType = types.anything;
               options = {
@@ -27,30 +28,25 @@ in {
                   type = types.submodule ({...}: {
                     freeformType = types.anything;
                     options = {
-                      CAMOFOX_BIND_HOST = mkOption {
-                        type = types.singleLineStr;
-                        default = "::1";
-                      };
-                      CAMOFOX_PORT = mkOption {
-                        type = types.singleLineStr;
-                        default = toString cfg.port;
-                        readOnly = true;
-                      };
+                      # CAMOFOX_BIND_HOST = mkOption {
+                      #   type = types.singleLineStr;
+                      #   default = "::1";
+                      # };
+                      # CAMOFOX_PORT = mkOption {
+                      #   type = types.singleLineStr;
+                      #   default = toString cfg.port;
+                      #   readOnly = true;
+                      # };
                     };
                   });
                 };
               };
             });
           };
-          # set-env-vars = mkOption {
+          # systemd.services = mkOption {
+          #   default = {};
           #   type = types.anything;
           # };
-          systemd.services = mkOption {
-            type = types.anything;
-          };
-        };
-        port = mkOption {
-          type = types.port;
         };
         sleep-on-idle-id = mkOption {
           type = types.nullOr types.singleLineStr;
@@ -69,16 +65,37 @@ in {
             type = types.anything;
           };
         };
-        # uboDir = mkOption {
-        #   type = types.singleLineStr;
-        # };
-        CAMOFOX_URL = mkOption {
-          type = types.singleLineStr;
-          default = let
-            inherit (pkgs.myLib) bracketIpv6;
-            inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
-          in "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
+        oci-container-cfg = mkOption {
+          type = types.anything;
+          default = outerCfg.virtualisation.oci-containers.containers.${cfg.oci-container.name};
+          readOnly = true;
         };
+        # host = mkOption {
+        #   type = types.singleLineStr;
+        #   default = "::1";
+        # };
+        # port = mkOption {
+        #   type = types.port;
+        # };
+        host = mkOption {
+          type = types.singleLineStr;
+          default = cfg.oci-container-cfg.environment.CAMOFOX_BIND_HOST;
+          readOnly = true;
+        };
+        port = mkOption {
+          type = types.singleLineStr;
+          default = cfg.oci-container-cfg.environment.CAMOFOX_PORT;
+          readOnly = true;
+        };
+        # url = mkOption {
+        #   type = types.singleLineStr;
+        #   default = let
+        #     inherit (pkgs.myLib) bracketIpv6;
+        #     # inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
+        #     inherit (cfg.oci-container-cfg.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
+        #   in "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
+        #   readOnly = true;
+        # };
       };
     }));
   };
@@ -87,15 +104,9 @@ in {
     sops.secrets = mkMerge (mapAttrsToList (_: cfg: {
         ${cfg.sops.envFile.key} = {
           inherit (cfg.sops.envFile) sopsFile;
-          # restartUnits = [];
         };
       })
       enabled);
-
-    # systemd.tmpfiles.rules = flatten (mapAttrsToList (name: cfg: [
-    #     "d ${cfg.uboDir} 0755 0 0 - -"
-    #   ])
-    #   enabled);
 
     virtualisation.oci-containers.containers = mkMerge (mapAttrsToList (_: cfg: {
         ${cfg.oci-container.name} = mkMerge [
@@ -105,7 +116,11 @@ in {
             autoStart = false;
             environmentFiles = [outerCfg.sops.secrets.${cfg.sops.envFile.key}.path];
             environment = {
-              CAMOFOX_DISABLE_DEFAULT_ADDONS = "1";
+              inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_PORT;
+              CAMOFOX_BIND_HOST = mkDefault "::1";
+              # CAMOFOX_DISABLE_DEFAULT_ADDONS = "1";
+              # CAMOFOX_BIND_HOST = cfg.host;
+              # CAMOFOX_PORT = toString cfg.port;
             };
             extraOptions =
               [
@@ -121,26 +136,11 @@ in {
       })
       enabled);
 
-    systemd.services = mkMerge (mapAttrsToList (_: cfg: {
-        ${outerCfg.virtualisation.oci-containers.containers.${cfg.oci-container.name}.serviceName} = mkMerge [
-          cfg.modules.systemd.services
-          {
-            inherit (cfg.modules.systemd.services) before after;
-          }
-        ];
-      })
-      enabled);
-
-    # myOpt.set-env-vars = mkMerge (mapAttrsToList (name: cfg: let
-    #     inherit (pkgs.myLib) bracketIpv6;
-    #     inherit (cfg.modules.virtualisation.oci-containers.containers.environment) CAMOFOX_BIND_HOST CAMOFOX_PORT;
-    #   in {
-    #     "camofox-browser-oci-${name}" = mkMerge [
-    #       cfg.modules.set-env-vars
+    # systemd.services = mkMerge (mapAttrsToList (_: cfg: {
+    #     ${outerCfg.virtualisation.oci-containers.containers.${cfg.oci-container.name}.serviceName} = mkMerge [
+    #       cfg.modules.systemd.services
     #       {
-    #         environment = {
-    #           CAMOFOX_URL = "http://${bracketIpv6 "${CAMOFOX_BIND_HOST}:${CAMOFOX_PORT}"}";
-    #         };
+    #         inherit (cfg.modules.systemd.services) before after;
     #       }
     #     ];
     #   })
