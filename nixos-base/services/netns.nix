@@ -37,35 +37,41 @@ in {
               type = types.bool;
             };
             public-egress.ipv4 = mkOption {
-              type = types.submodule {
+              default = {};
+              type = types.submodule ({options, ...}: {
                 options = {
                   enable = mkOption {
                     type = types.bool;
-                    default = false;
+                    default = options.address.isDefined || options.gateway.isDefined;
+                    defaultText = literalExpression "options.address.isDefined || options.gateway.isDefined";
+                    description = "Setting either endpoint enables this family by default; both endpoints are required when enabled.";
                   };
                   address = mkOption {type = ipv4Type;};
                   gateway = mkOption {type = ipv4Type;};
                 };
-              };
+              });
               description = ''
-                Set the namespace address and host gateway to two unused unicast IPv4 addresses without prefixes.
+                Set the namespace address and host gateway to two unused private IPv4 addresses (RFC 1918) without prefixes.
                 Generate a candidate pair (address first, gateway second):
                 `python3 -c 'from ipaddress import IPv4Address; from secrets import randbits; n = IPv4Address("10.0.0.0") + (randbits(22) << 2); print(n + 2, n + 1)'`
               '';
             };
             public-egress.ipv6 = mkOption {
-              type = types.submodule {
+              default = {};
+              type = types.submodule ({options, ...}: {
                 options = {
                   enable = mkOption {
                     type = types.bool;
-                    default = false;
+                    default = options.address.isDefined || options.gateway.isDefined;
+                    defaultText = literalExpression "options.address.isDefined || options.gateway.isDefined";
+                    description = "Setting either endpoint enables this family by default; both endpoints are required when enabled.";
                   };
                   address = mkOption {type = ipv6Type;};
                   gateway = mkOption {type = ipv6Type;};
                 };
-              };
+              });
               description = ''
-                Set the namespace address and host gateway to two unused unicast IPv6 addresses without prefixes.
+                Set the namespace address and host gateway to two unused locally assigned IPv6 addresses in fd00::/8 without prefixes.
                 Generate a candidate pair (address first, gateway second):
                 `python3 -c 'from ipaddress import IPv6Address; from secrets import randbits; n = IPv6Address("fd00::") + (randbits(40) << 80); print(n + 2, n + 1)'`
               '';
@@ -107,23 +113,16 @@ in {
   config = mkIf (enabled != {}) {
     assertions = [
       {
-        assertion = all (addr:
-          addr
-          != false
-          && builtins.match "ff[[:xdigit:]]{2}:.*" addr == null
-          && !(hasPrefix "0:0:0:0:0:ffff:" addr)
-          && addr != "0:0:0:0:0:0:0:0"
-          && addr != "0:0:0:0:0:0:0:1")
-        ipv6Endpoints;
-        message = "IPv6 egress endpoints must be valid unicast addresses, not loopback or IPv4-mapped addresses.";
+        assertion = all (addr: addr != false && builtins.match "fd[[:xdigit:]]{2}:.*" addr != null) ipv6Endpoints;
+        message = "IPv6 egress addresses and gateways must be locally assigned unique-local addresses in fd00::/8.";
       }
       {
         assertion = allUnique ipv6Endpoints;
         message = "IPv6 egress addresses and gateways must be unique across namespace links.";
       }
       {
-        assertion = all (addr: let first = toInt (head (splitString "." addr)); in first > 0 && first != 127 && first < 224) ipv4Endpoints;
-        message = "IPv4 egress endpoints must be usable unicast addresses, not loopback addresses.";
+        assertion = all (addr: builtins.match "(10|172[.](1[6-9]|2[0-9]|3[01])|192[.]168)[.].*" addr != null) ipv4Endpoints;
+        message = "IPv4 egress addresses and gateways must be in 10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16.";
       }
       {
         assertion = all (cfg: !cfg.ipv4.disable) (attrValues ipv4Egress);
