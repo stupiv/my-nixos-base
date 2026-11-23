@@ -135,8 +135,6 @@ in {
             extraOptions =
               [
                 "--shm-size=2g"
-                "--cap-drop=ALL"
-                "--security-opt=no-new-privileges"
               ]
               ++ (optional (cfg.netns-id == null) "--network=host");
           }

@@ -83,20 +83,6 @@ in {
           default = cfg.camofox-browser-oci-id != null;
           readOnly = true;
         };
-        cdp-compose-id = mkOption {
-          type = types.nullOr types.singleLineStr;
-          default = null;
-        };
-        cdp-compose-cfg = mkOption {
-          type = types.anything;
-          default = outerCfg.myOpt.cdp-compose.${cfg.cdp-compose-id};
-          readOnly = true;
-        };
-        cdp.enable = mkOption {
-          type = types.bool;
-          default = cfg.cdp-compose-id != null;
-          readOnly = true;
-        };
         sops.envFile = {
           key = mkOption {
             type = types.singleLineStr;
@@ -110,17 +96,41 @@ in {
             readOnly = true;
           };
         };
-        lightpanda = {
+        cdp = {
           enable = mkOption {
             type = types.bool;
-            default = !cfg.camofox-browser.enable && !cfg.cdp.enable;
-            readOnly = true;
+            default = cfg.cdp.package != null;
           };
           package = mkOption {
-            type = types.package;
-            default = inputs.lightpanda.packages.${pkgs.stdenv.hostPlatform.system}.default;
+            type = types.nullOr types.package;
+            default = null;
           };
         };
+        # lightpanda = {
+        #   enable = mkOption {
+        #     type = types.bool;
+        #     default = !cfg.camofox-browser.enable && !cfg.cdp.enable;
+        #     readOnly = true;
+        #   };
+        #   package = mkOption {
+        #     type = types.package;
+        #     default = inputs.lightpanda.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        #   };
+        # };
+        # cdp-compose-id = mkOption {
+        #   type = types.nullOr types.singleLineStr;
+        #   default = null;
+        # };
+        # cdp-compose-cfg = mkOption {
+        #   type = types.anything;
+        #   default = outerCfg.myOpt.cdp-compose.${cfg.cdp-compose-id};
+        #   readOnly = true;
+        # };
+        # cdp.enable = mkOption {
+        #   type = types.bool;
+        #   default = cfg.cdp-compose-id != null;
+        #   readOnly = true;
+        # };
       };
     }));
   };
@@ -131,10 +141,10 @@ in {
           assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-oci-cfg.netns-id);
           message = "assertion = !cfg.camofox-browser.enable || (cfg.netns-id == cfg.camofox-browser-oci-cfg.netns-id);";
         }
-        {
-          assertion = !cfg.cdp.enable || (cfg.netns-id == cfg.cdp-compose-cfg.netns-id);
-          message = "assertion = !cfg.cdp.enable || (cfg.netns-id == cfg.cdp-compose-cfg.netns-id);";
-        }
+        # {
+        #   assertion = !cfg.cdp.enable || (cfg.netns-id == cfg.cdp-compose-cfg.netns-id);
+        #   message = "assertion = !cfg.cdp.enable || (cfg.netns-id == cfg.cdp-compose-cfg.netns-id);";
+        # }
       ])
       enabled);
 
@@ -176,6 +186,9 @@ in {
                   settings = {
                     browser.cloud_provider = "camofox";
                     plugins.enabled = ["camofox"];
+                    browser.cdp_url = mkDefault "";
+                    browser.engine = mkDefault "";
+                    browser.executable_path = mkDefault "";
                   };
                   environment = {
                     CAMOFOX_URL = cfg.camofox-browser-oci-cfg.url;
@@ -183,26 +196,34 @@ in {
                 })
                 (optionalAttrs (cfg.cdp.enable) {
                   settings = {
-                    browser.cdp_url = cfg.cdp-compose-cfg.url;
-                  };
-                })
-                (optionalAttrs (!cfg.cdp.enable) {
-                  settings = {
                     browser.cdp_url = "";
+                    browser.executable_path = getExe cfg.cdp.package;
+                    browser.user_data_dir = "";
+                    browser.headed = false;
                   };
                 })
-                (optionalAttrs (cfg.lightpanda.enable) {
-                  settings = {
-                    browser.cloud_provider = "local";
-                    browser.engine = "lightpanda";
-                  };
-                  extraPackages = [cfg.lightpanda.package];
-                })
-                (optionalAttrs (!cfg.lightpanda.enable) {
-                  settings = {
-                    browser.engine = "";
-                  };
-                })
+                # (optionalAttrs (cfg.cdp.enable) {
+                #   settings = {
+                #     browser.cdp_url = cfg.cdp-compose-cfg.url;
+                #   };
+                # })
+                # (optionalAttrs (!cfg.cdp.enable) {
+                #   settings = {
+                #     browser.cdp_url = "";
+                #   };
+                # })
+                # (optionalAttrs (cfg.lightpanda.enable) {
+                #   settings = {
+                #     browser.cloud_provider = "local";
+                #     browser.engine = "lightpanda";
+                #   };
+                #   extraPackages = [cfg.lightpanda.package];
+                # })
+                # (optionalAttrs (!cfg.lightpanda.enable) {
+                #   settings = {
+                #     browser.engine = "";
+                #   };
+                # })
                 {
                   enable = true;
                   inherit (cfg) stateDir;
