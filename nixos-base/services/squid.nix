@@ -12,6 +12,9 @@ with lib; let
       cache_log stdio:/var/log/squid-${name}/cache.log
       access_log stdio:/var/log/squid-${name}/access.log
       cache_store_log stdio:/var/log/squid-${name}/store.log
+      cache_dir ufs /var/cache/squid-${name} 100 16 256
+      coredump_dir none
+      pid_filename /run/squid-${name}/squid.pid
 
       http_port [${cfg.tcp-to-unix.cfg.origin.host}]:${toString cfg.tcp-to-unix.cfg.origin.port}
       ${optionalString cfg.egress-restriction.enable ''
@@ -22,6 +25,9 @@ with lib; let
         http_access deny my_squid_connect !my_squid_https_port
         http_access deny my_squid_connect my_squid_https_port !my_squid_allowed_fqdns
         http_access allow my_squid_connect my_squid_https_port my_squid_allowed_fqdns
+      ''}
+      ${optionalString (!cfg.egress-restriction.enable) ''
+        http_access allow all
       ''}
       ${cfg.extraConfig}
     '';
@@ -84,6 +90,7 @@ in {
           };
           fqdns = mkOption {
             type = types.listOf (types.singleLineStr);
+            default = [];
           };
         };
         tcp-to-unix = {
@@ -94,6 +101,7 @@ in {
           cfg = mkOption {
             type = types.anything;
             default = outerCfg.myOpt.systemd-socket-proxyd.${cfg.tcp-to-unix.id};
+            readOnly = true;
           };
           origin = {
             port = mkOption {
@@ -113,6 +121,7 @@ in {
           cfg = mkOption {
             type = types.anything;
             default = outerCfg.myOpt.systemd-socket-proxyd.${cfg.unix-to-tcp.id};
+            readOnly = true;
           };
           proxy = {
             port = mkOption {
@@ -146,10 +155,17 @@ in {
   };
 
   config = mkIf (enabled != {}) {
+    assertions = concatLists (mapAttrsToList (name: cfg: [
+      {
+        assertion = !cfg.egress-restriction.enable || cfg.egress-restriction.fqdns != [];
+        message = "myOpt.squid.${name}.egress-restriction.fqdns must be non-empty when myOpt.squid.${name}.egress-restriction.enable is true";
+      }
+    ]) enabled);
     systemd.services = mkMerge ([
         (mapAttrs' (name: cfg:
           nameValuePair cfg.serviceName {
-            after = ["network.target" "nss-lookup.target"];
+            after = ["network-online.target" "nss-lookup.target"];
+            wants = ["network-online.target"];
             restartTriggers = [configFiles.${name} cfg.package];
             environment.TMPDIR = "/run/squid-${name}";
             serviceConfig = {
