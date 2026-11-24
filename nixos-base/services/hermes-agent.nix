@@ -186,9 +186,9 @@ in {
                   settings = {
                     browser.cloud_provider = "camofox";
                     plugins.enabled = ["camofox"];
-                    browser.cdp_url = mkDefault "";
-                    browser.engine = mkDefault "";
-                    browser.executable_path = mkDefault "";
+                    browser.cdp_url = "";
+                    browser.engine = "";
+                    browser.executable_path = "";
                   };
                   environment = {
                     CAMOFOX_URL = cfg.camofox-browser-oci-cfg.url;
@@ -196,6 +196,7 @@ in {
                 })
                 (optionalAttrs (cfg.cdp.enable) {
                   settings = {
+                    browser.cloud_provider = "local";
                     browser.cdp_url = "";
                     browser.executable_path = getExe cfg.cdp.package;
                     browser.user_data_dir = "";
