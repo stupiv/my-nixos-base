@@ -12,9 +12,8 @@ with lib; let
       cache_log stdio:/var/log/squid-${name}/cache.log
       access_log stdio:/var/log/squid-${name}/access.log
       cache_store_log stdio:/var/log/squid-${name}/store.log
-      cache_dir ufs /var/cache/squid-${name} 100 16 256
-      coredump_dir none
-      pid_filename /run/squid-${name}/squid.pid
+      cache_dir ufs /var/lib/${cfg.StateDirectory} 100 16 256
+      pid_filename /run/${cfg.RuntimeDirectory}/squid.pid
 
       http_port [${cfg.tcp-to-unix.cfg.origin.host}]:${toString cfg.tcp-to-unix.cfg.origin.port}
       ${optionalString cfg.egress-restriction.enable ''
@@ -66,6 +65,14 @@ in {
         };
         netns-id = mkOption {
           type = types.singleLineStr;
+        };
+        StateDirectory = mkOption {
+          type = types.addCheck (types.strMatching "^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$") (s: s != "private" && !(hasPrefix "private/" s));
+          default = "squid-${name}";
+        };
+        RuntimeDirectory = mkOption {
+          type = types.strMatching "^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$";
+          default = "squid-${name}";
         };
         serviceName = mkOption {
           type = types.singleLineStr;
@@ -161,67 +168,48 @@ in {
         message = "myOpt.squid.${name}.egress-restriction.fqdns must be non-empty when myOpt.squid.${name}.egress-restriction.enable is true";
       }
     ]) enabled);
-    systemd.services = mkMerge ([
-        (mapAttrs' (name: cfg:
-          nameValuePair cfg.serviceName {
-            after = ["network-online.target" "nss-lookup.target"];
-            wants = ["network-online.target"];
-            restartTriggers = [configFiles.${name} cfg.package];
-            environment.TMPDIR = "/run/squid-${name}";
-            serviceConfig = {
-              Type = "notify";
-              NotifyAccess = "main";
-              DynamicUser = true;
-              User = "squid-${name}";
-              Group = "squid-${name}";
-              RuntimeDirectory = "squid-${name}";
-              RuntimeDirectoryMode = "0700";
-              CacheDirectory = "squid-${name}";
-              CacheDirectoryMode = "0700";
-              LogsDirectory = "squid-${name}";
-              LogsDirectoryMode = "0700";
-              WorkingDirectory = "/var/cache/squid-${name}";
-              NoExecPaths = ["/var/cache/squid-${name}" "/var/log/squid-${name}" "/run/squid-${name}"];
-              ExecStartPre = "${cfg.package}/bin/squid --foreground -z -f ${configFiles.${name}}";
-              ExecStart = "${cfg.package}/bin/squid --foreground -YCs -f ${configFiles.${name}}";
-              KillMode = "mixed";
-              Restart = "on-failure";
-              NoNewPrivileges = true;
-              PrivateTmp = true;
-              PrivateDevices = true;
-              PrivateIPC = true;
-              ProtectSystem = "strict";
-              ProtectHome = true;
-              ProtectClock = true;
-              ProtectControlGroups = true;
-              ProtectHostname = true;
-              ProtectKernelLogs = true;
-              ProtectKernelModules = true;
-              ProtectKernelTunables = true;
-              ProtectProc = "invisible";
-              CapabilityBoundingSet = "";
-              AmbientCapabilities = "";
-              KeyringMode = "private";
-              LimitCORE = 0;
-              LockPersonality = true;
-              MemoryDenyWriteExecute = true;
-              RemoveIPC = true;
-              RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK"];
-              RestrictNamespaces = true;
-              RestrictRealtime = true;
-              RestrictSUIDSGID = true;
-              SystemCallArchitectures = "native";
-              SystemCallFilter = ["@system-service"];
-              SystemCallErrorNumber = "EPERM";
-              UMask = "0077";
-            };
-          })
-        enabled)
-      ]
-      ++ (mapAttrsToList (_: cfg: (genAttrs cfg.set-env-vars.systemd-services (_: {
+    systemd.services = mkMerge (
+      mapAttrsToList (name: cfg: {
+        ${cfg.serviceName} = {
+          after = ["network-online.target" "nss-lookup.target"];
+          wants = ["network-online.target"];
+          restartTriggers = [configFiles.${name} cfg.package];
+          environment.TMPDIR = "%t/${cfg.RuntimeDirectory}";
+          serviceConfig = {
+            Type = "notify";
+            NotifyAccess = "main";
+            DynamicUser = true;
+            User = "squid-${name}";
+            Group = "squid-${name}";
+            StateDirectory = cfg.StateDirectory;
+            StateDirectoryMode = "0700";
+            RuntimeDirectory = cfg.RuntimeDirectory;
+            RuntimeDirectoryMode = "0700";
+            LogsDirectory = "squid-${name}";
+            LogsDirectoryMode = "0700";
+            WorkingDirectory = "%S/${cfg.StateDirectory}";
+            ExecStartPre = "${cfg.package}/bin/squid --foreground -z -f ${configFiles.${name}}";
+            ExecStart = "${cfg.package}/bin/squid --foreground -YCs -f ${configFiles.${name}}";
+            KillMode = "mixed";
+            Restart = "on-failure";
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            PrivateDevices = true;
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            ProtectControlGroups = true;
+            ProtectKernelModules = true;
+            ProtectKernelTunables = true;
+            CapabilityBoundingSet = "";
+            LimitCORE = 0;
+            UMask = "0077";
+          };
+        };
+      }) enabled
+      ++ mapAttrsToList (_: cfg: (genAttrs cfg.set-env-vars.systemd-services (_: {
           inherit (cfg) environment;
         })))
-        enabled));
+        enabled);
     virtualisation.oci-containers.containers = mkMerge (
       mapAttrsToList (_: cfg: (genAttrs cfg.set-env-vars.oci-containers (_: {
         inherit (cfg) environment;
