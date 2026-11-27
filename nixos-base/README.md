@@ -1,9 +1,13 @@
+# nixos-base/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `nixos-base/` provides the shared system layer for both flake outputs.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../README.md).
     2. `default.nix` defines the active module inventory.
         1. It imports the `myLib` and `myPkgs` sibling scopes.
-        2. It imports [`dnscrypt/`](dnscrypt/HANDOVER.md), [`services/`](services/HANDOVER.md), and [`terminal/`](terminal/HANDOVER.md).
-        3. [`unmaintained/`](unmaintained/HANDOVER.md) has no entry point and remains excluded.
+        2. It imports [`dnscrypt/`](dnscrypt/README.md), [`services/`](services/README.md), and [`terminal/`](terminal/README.md).
+        3. [`unmaintained/`](unmaintained/README.md) has no entry point and remains excluded.
     3. Identity configuration determines administrative access.
         1. `admin.nix` declares `myOpt.admin.{username,hashedPassword,authorizedKeys,homeDirectory,uid,gid}`.
         2. It creates a normal user, a matching group, and wheel membership.
@@ -46,7 +50,7 @@
         1. Add small cross-cutting defaults here and register them in `default.nix`.
         2. Put workloads under `services/` using its instance pattern.
         3. Keep unfinished modules outside the active import graph.
-    7. Read the related handovers before host integration.
-        1. The [root handover](../HANDOVER.md) lists mandatory values and global issues.
-        2. The [services handover](services/HANDOVER.md) describes workloads and their primitives.
-        3. The [installation handover](../install/HANDOVER.md) covers hardware, disko, and age-key provisioning.
+    7. Read the related READMEs before host integration.
+        1. The [root README](../README.md) lists mandatory values and global issues.
+        2. The [services README](services/README.md) describes workloads and their primitives.
+        3. The [installation README](../install/README.md) covers hardware, disko, and age-key provisioning.

@@ -1,5 +1,9 @@
+# nixos-base/services/sleep-on-idle/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `sleep-on-idle/` provides socket-activated applications with idle cgroup freezing.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../../README.md).
     2. Seven Nix files separate the mechanism's concerns.
         1. `default.nix` imports the implementation files and retains the self-import comment marker.
         2. `options.nix` declares `myOpt.sleep-on-idle.<name>`.
@@ -17,7 +21,7 @@
         6. Health-check options select an endpoint, path, and retry sleep interval defaulting to `1`.
         7. `set-cgroup-parent` selects systemd services, OCI containers, and NixOS containers.
         8. `freezeName` and `freezeUnit` are read-only derived values.
-        9. [`mkEndpointOpt`](../../../myLib/HANDOVER.md) brackets proxy listeners and curl targets while leaving origins unbracketed.
+        9. [`mkEndpointOpt`](../../common/myLib/mkEndpointOpt.nix) brackets proxy listeners and curl targets while leaving origins unbracketed.
     4. A client connection activates the proxy and wakes the application.
         1. Endpoint sockets set `TriggerLimitBurst = 0` and `NoDelay = true`.
         2. Proxy services require and follow their socket and freeze unit.
@@ -56,7 +60,7 @@
         1. Add endpoints or instances while preserving default-endpoint contracts.
         2. Follow `plausible-compose.nix` for a complete integration example.
         3. Prefer cheap, idempotent readiness probes such as Frappe's `/api/method/ping`.
-    10. Read the related handovers before changing shared contracts.
-        1. The [services handover](../HANDOVER.md) describes proxies, Squid, and publication.
-        2. The [library handover](../../../myLib/HANDOVER.md) describes endpoint normalization.
-        3. The [compose handover](../compose/HANDOVER.md) describes major consumers.
+    10. Read the related READMEs before changing shared contracts.
+        1. The [services README](../README.md) describes proxies, Squid, and publication.
+        2. The [library source](../../common/myLib/) describes endpoint normalization.
+        3. The [compose README](../compose/README.md) describes major consumers.

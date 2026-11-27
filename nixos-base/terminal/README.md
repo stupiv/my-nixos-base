@@ -1,5 +1,9 @@
+# nixos-base/terminal/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `nixos-base/terminal/` defines the system-wide CLI profile for laptops and VPS hosts.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../README.md).
     2. `default.nix` imports packages, aliases, shell initialization, and trash cleanup.
         1. Keep its commented self-import marker.
         2. These modules use NixOS settings rather than home-manager.
@@ -40,6 +44,6 @@
         1. Add a package-and-alias module and register it in `default.nix`.
         2. Prefer `getExe pkgs.<tool>` over bare executable names in scripts.
         3. Keep systemd scripts compatible with global strict shell checks.
-    8. Read the related handovers for adjacent configuration.
-        1. The [desktop-profile handover](../../laptop-base/home-manager/HANDOVER.md) covers user-facing GUI tools.
-        2. The [shared-system handover](../HANDOVER.md) covers global shell-check policy.
+    8. Read the related READMEs for adjacent configuration.
+        1. The [desktop-profile README](../../laptop-base/home-manager/README.md) covers user-facing GUI tools.
+        2. The [shared-system README](../README.md) covers global shell-check policy.

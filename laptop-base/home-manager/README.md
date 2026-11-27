@@ -1,8 +1,12 @@
+# laptop-base/home-manager/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `laptop-base/home-manager/` defines the admin user's desktop profile.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../README.md).
     2. `home-manager.nix` imports this directory with `pkgs`, `config`, `lib`, and `inputs`.
         1. `default.nix` imports `../common` and the active application modules.
-        2. [`unmaintained/`](unmaintained/HANDOVER.md) remains excluded.
+        2. [`unmaintained/`](unmaintained/README.md) remains excluded.
         3. Keep system services in NixOS modules rather than this user profile.
     3. Most profile modules are enabled by default.
         1. `alacritty.nix` configures Alacritty with a Dracula-like palette.
@@ -34,10 +38,10 @@
         3. Native Wayland CopyQ depends on compatible Qt support in the pinned nixpkgs.
         4. Hermes' parked working-directory default also points to Downloads.
         5. Git, SSH, GPG, and editor configuration are absent from this profile.
-        6. The [terminal layer](../../nixos-base/terminal/HANDOVER.md) supplies fish and the system-wide Micro editor.
+        6. The [terminal layer](../../nixos-base/terminal/README.md) supplies fish and the system-wide Micro editor.
     7. Extend the profile with optional user-facing modules.
         1. Add GUI applications to `packages.nix` or create a module for application-specific services.
         2. Gate new `myOpt.<feature>.enable` options with `mkIf` and default them to `false`.
-        3. The [laptop handover](../HANDOVER.md) describes the surrounding NixOS wiring.
-        4. The [common handover](../common/HANDOVER.md) describes the missing package scopes.
-        5. The [parked-profile handover](unmaintained/HANDOVER.md) describes Hermes.
+        3. The [laptop README](../README.md) describes the surrounding NixOS wiring.
+        4. The [common README](../common/README.md) describes the missing package scopes.
+        5. The [parked-profile README](unmaintained/README.md) describes Hermes.

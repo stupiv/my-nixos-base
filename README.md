@@ -1,3 +1,17 @@
+# my-nixos-base
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
+## Documentation maintenance
+
+1. Keep these instructions in this `README.md`; do not create separate instruction files.
+2. Use lazy documentation maintenance for every `README.md`.
+3. Update a `README.md` only when an inconsistency is discovered.
+4. Do not actively search for inconsistencies.
+5. Do not update documentation merely because code changes.
+6. Correct stale links, names, snapshot dates, and verification markers only after an inconsistency is reported or noticed.
+7. Keep `README.md` as the canonical documentation filename.
+
 1. This repository provides reusable NixOS modules rather than a complete host configuration.
     1. These notes describe an unbuilt source snapshot from 2026-11-07.
         1. The original snapshot used branch `arena/a7026f5a-my-nixos-base` at commit `66ded62`.
@@ -11,13 +25,13 @@
         4. Application workloads are opt-in through `myOpt.*` instances.
         5. Unix sockets, isolated network namespaces, and socket activation connect most workloads.
         6. Sleep-on-idle freezes idle service slices rather than stopping their containers.
-    3. The directory handovers describe each layer.
-        1. [`nixos-base/`](nixos-base/HANDOVER.md) provides shared identity, SSH, DNS, boot, terminal, and service configuration.
-        2. [`laptop-base/`](laptop-base/HANDOVER.md) adds desktop environments, hardware settings, and home-manager.
-        3. [`vps-base/`](vps-base/HANDOVER.md) provides the minimal server entry point.
-        4. [`install/`](install/HANDOVER.md) provides partitioning, hardware configuration, and deliberate installation reminders.
-        5. [`myLib/`](myLib/HANDOVER.md) exposes helper functions through `pkgs.myLib`.
-        6. [`myPkgs/`](myPkgs/HANDOVER.md) exposes OCI image tags through `pkgs.myPkgs`.
+    3. The directory READMEs describe each layer.
+        1. [`nixos-base/`](nixos-base/README.md) provides shared identity, SSH, DNS, boot, terminal, and service configuration.
+        2. [`laptop-base/`](laptop-base/README.md) adds desktop environments, hardware settings, and home-manager.
+        3. [`vps-base/`](vps-base/README.md) provides the minimal server entry point.
+        4. [`install/`](install/README.md) provides partitioning, hardware configuration, and deliberate installation reminders.
+        5. [`nixos-base/common/myLib/`](nixos-base/common/myLib/) exposes helper functions through `pkgs.myLib`.
+        6. [`nixos-base/common/myPkgs.nix`](nixos-base/common/myPkgs.nix) exposes OCI image tags through `pkgs.myPkgs`.
         7. Neither exported module imports `install/` automatically.
         8. Repeated imports of `myLib` and `myPkgs` are deduplicated by the module system.
     4. `flake.nix` and `flake.lock` define the inputs and pins.
@@ -34,7 +48,7 @@
         11. Non-flake input `sjhgvr/oisd` supplies the pinned DNS blocklist.
         12. `NousResearch/hermes-agent/v0.21.7` supplies system and parked desktop agent modules.
         13. Hermes inputs intentionally avoid `follows` to preserve binary-cache compatibility.
-        14. The snapshot has no CI, README, formatter configuration, or populated `.gitignore`.
+        14. The snapshot has no CI, formatter configuration, or populated `.gitignore`.
         15. **⚠ verify** the expected formatter before replacing the hand-maintained, Alejandra-like formatting.
     5. Preserve the repository's module conventions.
         1. Keep commented self-import and dormant-directory markers such as `# ./default.nix`, `# ./defaut.nix`, and `# ./unmaintained`.
@@ -83,8 +97,8 @@
         3. Edit `nixos-base/terminal/` for CLI packages and aliases.
         4. Edit `laptop-base/de.nix` or the desktop toggles to change desktop environments.
         5. Add GUI packages to `laptop-base/home-manager/packages.nix`.
-        6. Update centralized image tags in `myPkgs/oci-img.nix` and pass them explicitly to service options.
-        7. Add shared helpers under `myLib/` and register them in `myLib/default.nix`.
+        6. Update centralized image tags in `nixos-base/common/myPkgs.nix` and pass them explicitly to service options.
+        7. Add shared helpers under `nixos-base/common/myLib/` and register them in `nixos-base/common/myLib/default.nix`.
     10. Validate downstream hosts before relying on these notes.
         1. Read the shared and laptop `default.nix` import lists first.
         2. Treat the source tree as authoritative because the original snapshot had only squashed history.
