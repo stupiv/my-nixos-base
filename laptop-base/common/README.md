@@ -1,5 +1,9 @@
+# laptop-base/common/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `laptop-base/common/` contains configuration shared by NixOS and home-manager.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../README.md).
     2. Both module systems import this directory separately.
         1. `laptop-base/default.nix` imports `./common` as a NixOS module.
         2. `laptop-base/home-manager/default.nix` imports `../common` as a home-manager module.
@@ -22,7 +26,7 @@
         4. Remove the substituter and its trusted key together if the cache is retired.
         5. Use `mkForce` only when intentionally replacing merged Nix settings.
         6. Do not assume deduplication crosses the separate NixOS and home-manager evaluations.
-    6. Read the related handovers before extending this directory.
-        1. The [laptop handover](../HANDOVER.md) explains both import paths.
-        2. The [profile handover](../home-manager/HANDOVER.md) explains ActivityWatch and EasyEffects.
-        3. The [root handover](../../HANDOVER.md) records inputs and **G4**.
+    6. Read the related READMEs before extending this directory.
+        1. The [laptop README](../README.md) explains both import paths.
+        2. The [profile README](../home-manager/README.md) explains ActivityWatch and EasyEffects.
+        3. The [root README](../../README.md) records inputs and **G4**.

@@ -1,5 +1,9 @@
+# nixos-base/services/compose/frappe-v16-compose/unmaintained/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `frappe-v16-compose/unmaintained/` preserves the previous Frappe implementation for reference.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../../../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../../../../README.md).
     2. `frappe-compose.backup.nix` is excluded from the parent import list.
         1. It declares the same `myOpt.frappe-v16-compose` option tree now separated into `../options.nix`.
         2. Never import both implementations together because their declarations and configuration overlap.
@@ -19,6 +23,6 @@
         1. Check available Git history rather than assuming the original squashed snapshot preserves earlier designs.
         2. Confirm another record of the pre-read-only design exists.
         3. Record any deletion rationale separately from unrelated changes.
-    6. Read the related handovers for active behavior and dormant-code policy.
-        1. The [live-module handover](../HANDOVER.md) describes scripts and read-only mode.
-        2. The [root handover](../../../../../HANDOVER.md) records dormant-directory issue **G3**.
+    6. Read the related READMEs for active behavior and dormant-code policy.
+        1. The [live-module README](../README.md) describes scripts and read-only mode.
+        2. The [root README](../../../../../README.md) records dormant-directory issue **G3**.

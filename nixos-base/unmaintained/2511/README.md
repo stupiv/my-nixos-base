@@ -1,5 +1,9 @@
+# nixos-base/unmaintained/2511/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `nixos-base/unmaintained/2511/` preserves Caddy option compatibility for older nixpkgs pins.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../../README.md).
     2. `default.nix` imports `caddy.nix`, but the inactive parent keeps the shim outside the live graph.
         1. The directory name refers to the NixOS 25.11 option boundary.
     3. `caddy.nix` declares three `services.caddy` options.
@@ -15,7 +19,7 @@
         4. Preserve the TCP and UDP distinction rather than assigning identical port lists.
         5. Retain the `lib` and `types` scope when copying nullable-port declarations.
         6. Remove the corresponding entry-point import if deleting the shim.
-    5. Read the related handovers before changing compatibility behavior.
-        1. The [parent handover](../HANDOVER.md) explains why this subtree is inactive.
-        2. The [shared-system handover](../../HANDOVER.md) describes the active Caddy NSS-path fix.
-        3. The [laptop handover](../../../laptop-base/HANDOVER.md) describes `services.caddy.openFirewall = false`.
+    5. Read the related READMEs before changing compatibility behavior.
+        1. The [parent README](../README.md) explains why this subtree is inactive.
+        2. The [shared-system README](../../README.md) describes the active Caddy NSS-path fix.
+        3. The [laptop README](../../../laptop-base/README.md) describes `services.caddy.openFirewall = false`.

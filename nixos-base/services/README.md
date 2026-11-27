@@ -1,6 +1,10 @@
+# nixos-base/services/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `nixos-base/services/` provides opt-in workloads and reusable service primitives.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../HANDOVER.md).
-    2. `default.nix` imports the service modules, [`compose/`](compose/HANDOVER.md), and [`sleep-on-idle/`](sleep-on-idle/HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../README.md).
+    2. `default.nix` imports the service modules, [`compose/`](compose/README.md), and [`sleep-on-idle/`](sleep-on-idle/README.md).
     3. Five primitives define most workload composition.
         1. `netns.nix` creates isolated network namespaces through `myOpt.netns.<name>`.
             1. Namespace units create a short hashed namespace name and bring up loopback.
@@ -11,13 +15,13 @@
             6. **G1** is resolved for Camofox, Fastcrw, and LiteLLM by moving namespace and cgroup wiring into compose modules.
             7. Old helpers expected `path`, `resolvConf`, and `unit` instead of the actual `nsPath` and `serviceUnit` options.
         2. `systemd-socket-proxyd.nix` bridges listening sockets to origin endpoints.
-            1. Instances declare `origin` and `proxy` using [`mkEndpointOpt`](../../myLib/HANDOVER.md).
+            1. Instances declare `origin` and `proxy` using [`mkEndpointOpt`](../common/myLib/mkEndpointOpt.nix).
             2. Origins use unbracketed endpoint syntax and listeners use bracketed IPv6.
             3. Per-instance drop-ins extend the shared `systemd-socket-proxyd@` socket and service templates.
             4. Socket units join `sockets.target`, while proxy services require and follow the origin service.
         3. `sleep-on-idle/` combines socket activation, readiness checks, and slice freezing.
             1. Its proxy runs `systemd-socket-proxyd --exit-idle-time` after the health check succeeds.
-            2. The [sleep-on-idle handover](sleep-on-idle/HANDOVER.md) explains the freeze and thaw lifecycle.
+            2. The [sleep-on-idle README](sleep-on-idle/README.md) explains the freeze and thaw lifecycle.
         4. `squid.nix` provides allowlisted egress through isolated proxy instances.
             1. Squid listens inside a namespace and is reached through socket proxies.
             2. `set-env-vars` injects proxy environment variables into selected systemd, OCI, or NixOS-container targets.
@@ -77,7 +81,7 @@
         2. Declare `myOpt.<service>` as instance submodules and guard generated configuration with `mkIf (enabled != {})`.
         3. Prefer unix sockets and compose-owned namespace, cgroup, and publication wiring.
         4. Register new modules in the existing `default.nix` import list without removing comment markers.
-    7. Read the related handovers for contracts outside this directory.
-        1. The [shared-system handover](../HANDOVER.md) covers sops and global system policy.
-        2. The [root handover](../../HANDOVER.md) records **G1**, **G6**, and maintenance entry points.
-        3. The [library handover](../../myLib/HANDOVER.md) describes endpoint and IPv6 helpers.
+    7. Read the related READMEs for contracts outside this directory.
+        1. The [shared-system README](../README.md) covers sops and global system policy.
+        2. The [root README](../../README.md) records **G1**, **G6**, and maintenance entry points.
+        3. The [library source](../common/myLib/) describes endpoint and IPv6 helpers.

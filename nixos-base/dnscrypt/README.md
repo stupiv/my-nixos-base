@@ -1,5 +1,9 @@
+# nixos-base/dnscrypt/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `nixos-base/dnscrypt/` provides encrypted DNS with DNSSEC and an OISD blocklist.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../README.md).
     2. `default.nix` imports the shared IPv6 module, `dnscrypt.nix`, and `filter.nix`.
         1. Reimporting `../ipv6.nix` is deduplicated by the module system.
         2. Keep the commented self-import marker.
@@ -31,7 +35,7 @@
         1. Add blocked domains through the lines-valued `myOpt.dnscrypt.filter`.
         2. Override `services.dnscrypt-proxy.settings` for resolver policy changes.
         3. Keep source URLs and their minisign keys consistent when adding resolver sources.
-    8. Read the related handovers for shared option consumers.
-        1. The [root handover](../../HANDOVER.md) lists mandatory IPv6 values.
-        2. The [services handover](../services/HANDOVER.md) describes Cloudflared.
-        3. The [shared-system handover](../HANDOVER.md) covers IPv6 and NetworkManager.
+    8. Read the related READMEs for shared option consumers.
+        1. The [root README](../../README.md) lists mandatory IPv6 values.
+        2. The [services README](../services/README.md) describes Cloudflared.
+        3. The [shared-system README](../README.md) covers IPv6 and NetworkManager.

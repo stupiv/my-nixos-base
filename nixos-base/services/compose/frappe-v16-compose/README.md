@@ -1,5 +1,9 @@
+# nixos-base/services/compose/frappe-v16-compose/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `frappe-v16-compose/` runs a complete Frappe and ERPNext v16 bench through Podman.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../../../README.md).
         1. The authoring sandbox lacked both Nix and Podman.
     2. The bench and runtime use separate storage mechanisms.
         1. A host `<name>-build.service` builds the bench with the official `frappe/build` image.
@@ -19,7 +23,7 @@
         7. `configurator.sh` writes database sockets, Valkey sockets, Socket.IO settings, maintenance flags, and hostname configuration.
         8. `create-site.sh` waits for prerequisites, creates a site, and writes `.site-created`.
         9. `migrate.sh` waits for the marker, installs missing apps, and migrates the site.
-        10. The [unmaintained handover](unmaintained/HANDOVER.md) describes the previous implementation.
+        10. The [unmaintained README](unmaintained/README.md) describes the previous implementation.
     4. Each `myOpt.frappe-v16-compose.<name>` instance exposes deployment options.
         1. `enable` defaults to `true`.
         2. `proxy-compose-id` and `netns-id` default to the instance name.
@@ -74,12 +78,12 @@
         14. Hostname changes require rerunning the configurator because `HOST_NAME` embeds `https://<hostname>`.
     9. Upgrade the stack deliberately.
         1. Select compatible base-image tags, builder tags, and app branches while satisfying the ERPNext assertion.
-        2. Update MariaDB and Valkey images from the [central image definitions](../../../../myPkgs/oci-img.nix).
+        2. Update MariaDB and Valkey images from the [shared package scope](../../../common/myPkgs.nix).
         3. Disable read-only mode and watch build, configurator, create-site, and migrate complete.
         4. Re-enable read-only mode after verification.
         5. Read create-site's recovery guidance before touching partial-site markers or using destructive `bench drop-site` commands.
-    10. Read the related handovers for shared infrastructure.
-        1. The [compose handover](../HANDOVER.md) compares container runtimes and persistence.
-        2. The [sleep-on-idle handover](../../sleep-on-idle/HANDOVER.md) describes the freeze and thaw front door.
-        3. The [services handover](../../HANDOVER.md) describes namespaces and Squid egress.
-        4. The [previous-generation handover](unmaintained/HANDOVER.md) explains historical design differences.
+    10. Read the related READMEs for shared infrastructure.
+        1. The [compose README](../README.md) compares container runtimes and persistence.
+        2. The [sleep-on-idle README](../../sleep-on-idle/README.md) describes the freeze and thaw front door.
+        3. The [services README](../../README.md) describes namespaces and Squid egress.
+        4. The [previous-generation README](unmaintained/README.md) explains historical design differences.

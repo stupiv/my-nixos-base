@@ -1,10 +1,14 @@
+# laptop-base/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `laptop-base/` exports the workstation flavour as `flake.nixosModules.laptop-base`.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../README.md).
     2. `default.nix` combines the shared system with desktop and hardware modules.
         1. `../nixos-base` supplies the shared system and service layer.
-        2. [`common/`](common/HANDOVER.md) supplies shared overlays and cache settings.
-        3. [`home-manager/`](home-manager/HANDOVER.md) supplies the user profile through `home-manager.nix`.
-        4. [`unmaintained/`](unmaintained/HANDOVER.md) remains outside the import graph.
+        2. [`common/`](common/README.md) supplies shared overlays and cache settings.
+        3. [`home-manager/`](home-manager/README.md) supplies the user profile through `home-manager.nix`.
+        4. [`unmaintained/`](unmaintained/README.md) remains outside the import graph.
         5. Keep the commented `# ./home-manager` marker because the directory contains home-manager modules rather than NixOS modules.
     3. Desktop selection requires coordinated toggles.
         1. `de.nix` sets `myOpt.cosmic.enable = true`.
@@ -35,12 +39,12 @@
         6. Configure the admin options before evaluating the profile.
     6. Hosts must still supply machine configuration.
         1. Provide hardware configuration, hostname, platform, and `system.stateVersion` downstream.
-        2. Import the [installation layer](../install/HANDOVER.md) when using disko and facter.
+        2. Import the [installation layer](../install/README.md) when using disko and facter.
         3. Keep the mandatory IPv6 override even on laptops without static IPv6.
         4. Account for RAM-backed `/tmp`, 400 percent zram, and forced empty disk swap when testing memory pressure and hibernation.
         5. Resolve **G4** because the unconditionally imported ActivityWatch module requires undefined `pkgs.pkgs-2611`.
     7. Extend the user and desktop layers in their intended contexts.
         1. Prefer [`home-manager/packages.nix`](home-manager/packages.nix) for GUI packages.
         2. Retain Wayland compatibility for Ozone and the Vietnamese input frontend.
-        3. The [shared-system handover](../nixos-base/HANDOVER.md) covers TLP assertions and common services.
-        4. The [root handover](../HANDOVER.md) covers mandatory values and global issues.
+        3. The [shared-system README](../nixos-base/README.md) covers TLP assertions and common services.
+        4. The [root README](../README.md) covers mandatory values and global issues.

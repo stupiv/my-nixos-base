@@ -1,5 +1,9 @@
+# nixos-base/services/compose/unmaintained/wordpress/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `compose/unmaintained/wordpress/` preserves a native NixOS WordPress deployment and fetcher overlays.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../../../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../../../../README.md).
     2. The stack runs WordPress inside a NixOS container through a PHP-FPM unix socket.
         1. Its parent is excluded from active imports and this directory has no `default.nix`.
         2. Plugins and themes use hash-pinned WordPress downloads rather than OCI images.
@@ -39,7 +43,7 @@
         3. Import the WordPress module explicitly or move it into the active compose directory.
         4. Supply WordPress package, state, required themes, MariaDB package, proxy settings, and the actual PHP-FPM socket.
         5. Uncommenting the parent directory alone does not import this entry-point-free subtree.
-    8. Read the related handovers before revival.
-        1. The [parent handover](../HANDOVER.md) describes Chatwoot and the outdated compose template.
-        2. The [sleep-on-idle handover](../../../sleep-on-idle/HANDOVER.md) describes FastCGI health checks.
-        3. The [library handover](../../../../../myLib/HANDOVER.md) describes the scope extended by fetcher overlays.
+    8. Read the related READMEs before revival.
+        1. The [parent README](../README.md) describes Chatwoot and the outdated compose template.
+        2. The [sleep-on-idle README](../../../sleep-on-idle/README.md) describes FastCGI health checks.
+        3. The [library source](../../../../common/myLib/) describes the scope extended by fetcher overlays.

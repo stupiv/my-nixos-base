@@ -1,5 +1,9 @@
+# install/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `install/` prepares individual machines and must be imported by the downstream host.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../README.md).
     2. `default.nix` imports five preparation modules.
         1. Keep the commented `# ./defaut.nix` self-import marker.
         2. `disko-config.nix` defines partitioning and requires `myOpt.disk.id` and `myOpt.disk.device`.
@@ -25,11 +29,11 @@
         5. Provision `/var/lib/sops-nix/key.txt` before removing `./reminders.nix` from the import list.
         6. Set `system.stateVersion` explicitly and retain that initial value across upgrades.
         7. The commented state-version example is `26.05`.
-        8. Supply disk options and the root handover's mandatory host values before deployment.
+        8. Supply disk options and the root README's mandatory host values before deployment.
     6. Review destructive changes and conflicting hardware declarations carefully.
         1. Removing the legacy BIOS partition changes the disko layout destructively.
         2. Avoid combining this facter-based hardware module with conflicting `nixos-generate-config` filesystem declarations.
         3. Neither exported flake module imports this installation layer automatically.
-    7. Read the related handovers before provisioning.
-        1. The [root handover](../HANDOVER.md) covers deployment and **G2**.
-        2. The [shared-system handover](../nixos-base/HANDOVER.md) covers GRUB and sops.
+    7. Read the related READMEs before provisioning.
+        1. The [root README](../README.md) covers deployment and **G2**.
+        2. The [shared-system README](../nixos-base/README.md) covers GRUB and sops.

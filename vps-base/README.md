@@ -1,5 +1,9 @@
+# vps-base/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `vps-base/` exports the minimal server flavour as `flake.nixosModules.vps-base`.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../README.md).
     2. `default.nix` imports only `../myPkgs` and `../nixos-base`.
         1. The explicit package-scope import is redundant with the shared layer but documents intent.
         2. Repeated module imports are deduplicated.
@@ -27,7 +31,7 @@
         4. OCI service modules select the Podman backend individually rather than relying on this entry point.
         5. The shared Podman module configures automatic pruning rather than global workload backend selection.
         6. Laptop and VPS flavours share service modules and differ mainly in desktop and hardware additions.
-    6. Read the related handovers before deployment.
-        1. The [root handover](../HANDOVER.md) lists mandatory values and global issues.
-        2. The [shared-system handover](../nixos-base/HANDOVER.md) describes inherited policy and services.
-        3. The [laptop handover](../laptop-base/HANDOVER.md) describes workstation-specific additions.
+    6. Read the related READMEs before deployment.
+        1. The [root README](../README.md) lists mandatory values and global issues.
+        2. The [shared-system README](../nixos-base/README.md) describes inherited policy and services.
+        3. The [laptop README](../laptop-base/README.md) describes workstation-specific additions.

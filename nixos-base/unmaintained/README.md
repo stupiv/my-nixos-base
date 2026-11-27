@@ -1,5 +1,9 @@
+# nixos-base/unmaintained/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `nixos-base/unmaintained/` holds parked modules outside both flake outputs.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../README.md).
     2. This directory has no `default.nix` and no active directory import.
         1. Adding an entry point does not activate anything unless a consumer also imports it.
         2. Keep dormant modules syntactically valid for tree-scanning tooling.
@@ -11,9 +15,9 @@
         5. Enabling the module without a driver value fails evaluation.
         6. Revival requires checking Mesa and graphics-option compatibility against the chosen nixpkgs pin.
         7. Prefer the laptop layer for hardware-specific GPU compute support.
-    4. [`2511/`](2511/HANDOVER.md) preserves a version-specific Caddy compatibility shim.
+    4. [`2511/`](2511/README.md) preserves a version-specific Caddy compatibility shim.
         1. Its dormant status reflects upstream replacement rather than unfinished hardware configuration.
-    5. Read the related handovers before changing imports.
-        1. The [Caddy-shim handover](2511/HANDOVER.md) describes its version boundary.
-        2. The [shared-system handover](../HANDOVER.md) lists active imports.
-        3. The [root handover](../../HANDOVER.md) records dormant-directory issue **G3**.
+    5. Read the related READMEs before changing imports.
+        1. The [Caddy-shim README](2511/README.md) describes its version boundary.
+        2. The [shared-system README](../README.md) lists active imports.
+        3. The [root README](../../README.md) records dormant-directory issue **G3**.

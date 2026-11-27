@@ -1,5 +1,9 @@
+# laptop-base/unmaintained/
+
+> Lazy mode: update this README only when inconsistencies are discovered, with no active search.
+
 1. `laptop-base/unmaintained/` holds the parked NixOS desktop-audio microphone module.
-    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root handover](../../HANDOVER.md).
+    1. These notes describe the unbuilt 2026-11-07 snapshot documented in the [root README](../../README.md).
     2. `laptop-base/default.nix` does not import this directory.
     3. `desktop-mic.nix` remaps a sink monitor into a virtual input device.
         1. `YOUR_SINK_NAME` is hard-coded to `alsa_output.pci-0000_00_1f.3.analog-stereo`.
@@ -18,7 +22,7 @@
         4. Preserve the `pulse.cmd` section name and its `flags` list.
         5. The snippet filename may change without renaming the PipeWire section.
         6. Configure recording latency and `stream.dont-remix` on clients as needed.
-    6. Read the related handovers before revival.
-        1. The [laptop handover](../HANDOVER.md) describes PipeWire and dconf.
-        2. The [parked home-manager handover](../home-manager/unmaintained/HANDOVER.md) covers the separate user-module shelf.
-        3. The [root handover](../../HANDOVER.md) explains why dormant code still needs valid syntax under **G3**.
+    6. Read the related READMEs before revival.
+        1. The [laptop README](../README.md) describes PipeWire and dconf.
+        2. The [parked home-manager README](../home-manager/unmaintained/README.md) covers the separate user-module shelf.
+        3. The [root README](../../README.md) explains why dormant code still needs valid syntax under **G3**.
